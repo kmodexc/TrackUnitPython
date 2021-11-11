@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="pytrackunit",
-    version="0.0.4",
+    version="0.0.5",
     author="Marius Schlueter",
     author_email="themrslue@googlemail.com",
     description="Easy access for TrackUnit REST API",
@@ -20,8 +20,7 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    package_dir={"": "pytrackunit"},
-    packages=setuptools.find_packages(where=""),
+    packages=["pytrackunit"],
     install_requires=["matplotlib", "requests"],
     python_requires=">=3.6",
 )
