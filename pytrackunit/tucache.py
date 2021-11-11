@@ -6,8 +6,8 @@ import os
 from os.path import join
 from hashlib import md5
 from pathlib import Path
-import requests
 import shutil
+import requests
 
 def get_from_file(fname):
     """get_from_file method"""
