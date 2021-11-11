@@ -8,9 +8,7 @@
 
 name: Create and Test Python Package
 
-on:
-  release:
-    types: [published]
+on: push
 
 jobs:
   deploy:
