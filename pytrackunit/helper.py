@@ -44,12 +44,12 @@ def get_next_section(data,finsec,fendsec=None,min_insec_len=None,min_endsec_len=
         elif in_section and finsec(datapoint):
             out.append(datapoint)
         elif in_section and not finsec(datapoint):
-            if (min_insec_len is None or len(out) > min_insec_len):
-                if (fendsec is None or fendsec(datapoint)):
-                    if off_sec_cnt >= min_endsec_len:
-                        return out
-                    off_sec_cnt += 1
-                    in_section = False
+            if (min_insec_len is None or len(out) > min_insec_len) and \
+                (fendsec is None or fendsec(datapoint)):
+                if off_sec_cnt >= min_endsec_len:
+                    return out
+                off_sec_cnt += 1
+                in_section = False
             else:
                 in_section = False
                 out = []
