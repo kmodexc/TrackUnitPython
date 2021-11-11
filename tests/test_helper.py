@@ -6,7 +6,7 @@ def test_ma():
 	for i in range(10):
 		testdata.append(testobject)
 	moving_avg(testdata,"val")
-def test_getsection():
+def test_getsection_always_in_section():
 	dobj = {}
 	dobj['time'] = '2021-06-18T13:18:18.0000000Z'
 	dobj['value'] = 2.0
