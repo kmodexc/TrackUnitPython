@@ -1,6 +1,8 @@
 from pytrackunit.tucache import TuCache, get_from_file
 import os.path
 import hashlib
+from os import listdir
+from os.path import isfile, join
 
 DUMMY_URL = 'https://pokeapi.co/api/v2/pokemon/ditto'
 DUMMY_RESPONSE_HASH = "3b28bef695a954335cadf285a6220b374bf5e947ef55102bea38823df53d2865"
@@ -10,8 +12,19 @@ def get_hash(x):
 def test_Clean():
 	cache = TuCache(_dir="pytest-web-cache")
 	cache.clean()
+	assert os.path.exists(cache.dir)
+	assert len(listdir(cache.dir)) == 0
+	fname = os.path.join(cache.dir,"asdf.txt")
+	f = open(fname,"w",encoding='utf8')
+	f.write('{"data": "data"}')
+	f.flush()
+	f.close()
 	cache.clean()
+	assert os.path.exists(cache.dir)
+	assert len(listdir(cache.dir)) == 0
 	cache.clean()
+	assert os.path.exists(cache.dir)
+	assert len(listdir(cache.dir)) == 0
 def test_GetFromFile_Clean():
 	cache = TuCache(_dir="pytest-web-cache")
 	cache.clean()

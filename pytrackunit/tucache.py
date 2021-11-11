@@ -7,6 +7,7 @@ from os.path import join
 from hashlib import md5
 from pathlib import Path
 import requests
+import shutil
 
 def get_from_file(fname):
     """get_from_file method"""
@@ -41,7 +42,7 @@ class TuCache:
     def clean(self):
         """clean method"""
         try:
-            os.remove(self.dir)
+            shutil.rmtree(self.dir)
         except OSError:
             print("Error at TUCache clean:\n"+str(traceback.format_exc()))
         Path(self.dir).mkdir(parents=True, exist_ok=True)
