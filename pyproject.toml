@@ -1,0 +1,9 @@
+[build-system]
+requires = [
+    "setuptools>=42",
+    "wheel",
+	"matplotlib",
+	"requests",
+	"pytest"
+]
+build-backend = "setuptools.build_meta"

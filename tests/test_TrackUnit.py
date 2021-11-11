@@ -1,4 +1,4 @@
-from TrackUnit import TrackUnit
+from pytrackunit import TrackUnit
 def test_get():
 	tu = TrackUnit()
 	data = tu.get("Unit?id=3331359")
