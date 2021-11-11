@@ -11,7 +11,7 @@ import requests
 def get_from_file(fname):
     """get_from_file method"""
     try:
-        if os.path.exists(fname):
+        if os.path.isfile(fname):
             try:
                 with open(fname,encoding='utf8') as file:
                     return json.load(file)
