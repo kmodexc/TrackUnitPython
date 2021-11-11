@@ -1,5 +1,5 @@
 from datetime import timedelta,datetime
-from TUCache import TUCache
+from . import TUCache
 from math import ceil
 from threading import Thread
 from multiprocessing import Pool
@@ -8,7 +8,7 @@ class TrackUnit:
     def __init__(self,api_key=None,verbose=False):
         if api_key is None:
             api_key = open("api.key").readlines()[0]
-        self.cache = TUCache(('API',api_key))
+        self.cache = TUCache.TUCache(('API',api_key))
         self.verbose = verbose
         self.req_period = 30
     def get(self,req):
