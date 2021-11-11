@@ -32,75 +32,44 @@ class TrackUnit:
         if sort_by_hours:
             data.sort(key=lambda x: (x['run1'] if 'run1' in x else 0),reverse=True)
         return data
-    def get_history(self,veh_id,tdelta=None,start=None,end=None,threads=1):
+    def general_daydiff_get(self,furl,tdelta,threads=1):
+        """returns data for timedependant requests for a given daydelta"""
+        end = datetime.now()
+        end = end.replace(hour=0,minute=0,second=0,microsecond=0)
+        if isinstance(tdelta,datetime):
+            start = end+tdelta
+        else:
+            irange = int(tdelta)
+            if irange <= 0:
+                return []
+            start = end-timedelta(days=irange)
+        return self.general_time_range_get(furl,start,end,threads)
+    def general_time_range_get(self,furl,start=None,end=None,threads=1):
+        """returns data for timedependant requests for a start and enddate"""
+        total_data = []
+        days = (end-start).days
+        requests = []
+        for week in range(ceil(days/self.req_period)):
+            wstart = start+timedelta(days=week*self.req_period)
+            wend = wstart+timedelta(days=min(self.req_period,(end-wstart).days))
+            requests.append(furl(\
+                wstart.strftime("%Y-%m-%dT%H:%M:%S"),\
+                wend.strftime("%Y-%m-%dT%H:%M:%S")))
+        if threads > 1:
+            with Pool(threads) as _p:
+                map_result = _p.map(self.get,requests)
+        else:
+            map_result = map(self.get,requests)
+        for _r in map_result:
+            total_data += _r
+        return total_data
+    def get_history(self,veh_id,tdelta,threads=1):
         """getHistory method"""
-        total_data = []
-        if tdelta is None and start is not None and end is not None:
-            days = (end-start).days
-            requests = []
-            request_period = self.req_period
-            for week in range(ceil(days/request_period)):
-                wstart = start+timedelta(days=week*request_period)
-                wstartstr = wstart.strftime("%Y-%m-%dT%H:%M:%S")
-                wend = wstart+timedelta(days=min(request_period,(end-wstart).days))
-                wendstr = wend.strftime("%Y-%m-%dT%H:%M:%S")
-                req = 'Report/UnitHistory?unitId='+veh_id+'&from='+wstartstr+\
-                    '.0000001Z&to='+wendstr+'.0000000Z'
-                requests.append(req)
-            if threads > 1:
-                with Pool(threads) as _p:
-                    map_result = _p.map(self.get,requests)
-            else:
-                map_result = map(self.get,requests)
-            for _r in map_result:
-                total_data += _r
-        elif tdelta is not None and start is None and end is None:
-            end = datetime.now()
-            end = end.replace(hour=0,minute=0,second=0,microsecond=0)
-            if isinstance(tdelta,datetime):
-                start = end+tdelta
-            else:
-                irange = int(tdelta)
-                if irange <= 0:
-                    return []
-                start = end-timedelta(days=irange)
-            total_data = self.get_history(veh_id,None,start,end,threads)
-        else:
-            raise Exception("invalid argument combination of tdelta,start,end")
-        return total_data
-    def get_candata(self,veh_id,tdelta=None,start=None,end=None,threads=1):
+        return self.general_daydiff_get(lambda t1,t2: \
+            'Report/UnitHistory?unitId='+veh_id+'&from='+t1+'.0000001Z&to='+t2+'.0000000Z',\
+                tdelta,threads)
+    def get_candata(self,veh_id,tdelta=None,threads=1):
         """getCanData method"""
-        total_data = []
-        if tdelta is None and start is not None and end is not None:
-            days = (end-start).days
-            requests = []
-            request_period = self.req_period
-            for week in range(ceil(days/request_period)):
-                wstart = start+timedelta(days=week*request_period)
-                wstartstr = wstart.strftime("%Y-%m-%dT%H:%M:%S")
-                wend = wstart+timedelta(days=min(request_period,(end-wstart).days))
-                wendstr = wend.strftime("%Y-%m-%dT%H:%M:%S")
-                req = 'Report/UnitExtendedInfo?Id='+veh_id+'&from='+wstartstr+\
-                    '.0000001Z&to='+wendstr+'.0000000Z'
-                requests.append(req)
-            if threads > 1:
-                with Pool(threads) as _p:
-                    map_result = _p.map(self.get,requests)
-            else:
-                map_result = map(self.get,requests)
-            for _r in map_result:
-                total_data += _r
-        elif tdelta is not None and start is None and end is None:
-            end = datetime.now()
-            end = end.replace(hour=0,minute=0,second=0,microsecond=0)
-            if isinstance(tdelta,datetime):
-                start = end+tdelta
-            else:
-                irange = int(tdelta)
-                if irange <= 0:
-                    return []
-                start = end-timedelta(days=irange)
-            total_data = self.get_candata(veh_id,None,start,end,threads)
-        else:
-            raise Exception("invalid argument combination of tdelta,start,end")
-        return total_data
+        return self.general_daydiff_get(lambda t1,t2: \
+            'Report/UnitExtendedInfo?Id='+veh_id+'&from='+t1+'.0000001Z&to='+t2+'.0000000Z',\
+                tdelta,threads)
