@@ -5,10 +5,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="pytrackunit",
-    version="0.0.3",
-    author="Marius Schlüter",
+    version="0.0.4",
+    author="Marius Schlueter",
     author_email="themrslue@googlemail.com",
-    description="A small example package",
+    description="Easy access for TrackUnit REST API",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/einsteinmaster/TrackUnitPython",
@@ -21,7 +21,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     package_dir={"": "pytrackunit"},
-    packages=setuptools.find_packages(where="src"),
+    packages=setuptools.find_packages(where=""),
     install_requires=["matplotlib", "requests"],
     python_requires=">=3.6",
 )
