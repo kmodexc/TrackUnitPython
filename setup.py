@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="pytrackunit",
-    version="0.0.5",
+    version="0.0.6",
     author="Marius Schlueter",
     author_email="themrslue@googlemail.com",
     description="Easy access for TrackUnit REST API",

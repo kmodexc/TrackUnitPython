@@ -61,6 +61,8 @@ def get_next_section(data,finsec,fendsec=None,min_insec_len=None,min_endsec_len=
             else:
                 out = []
                 off_sec_cnt = 0
+    if fendsec is None or min_endsec_len <= 0:
+        return out
     return None
 
 def get_time_diff(timepoint_1,timepoint_2):
