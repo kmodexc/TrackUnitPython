@@ -29,7 +29,9 @@ jobs:
         pip install build
         pip install flake
     - name: Run Test 
-      run: pytest
+      run: | 
+        echo ${{ secrets.TRACKUNIT_API_KEY }} > api.key
+        pytest
     - name: Run flake
       run: |
         # stop the build if there are Python syntax errors or undefined names
