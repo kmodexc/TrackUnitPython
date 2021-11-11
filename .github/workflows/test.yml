@@ -21,9 +21,7 @@ jobs:
         pip install .
     - name: Run Test 
       env:
-        API_KEY: ${{ secrets.PYPI_API_TOKEN }}
-      run: |         
-        echo $API_KEY >> api.key
-        cat api.key | cut -c1-8
+        API_KEY: ${{ secrets.TRACKUNIT_API_KEY }}
+      run: |
         echo $API_KEY | python -c $'import sys\nkey = sys.stdin.read()\nif len(key) == 32:\n   open("api.key","w").write(key)\nelse:\n   print("wrong length "+str(len(key)))\n   sys.exit(1)\n'
         pytest
