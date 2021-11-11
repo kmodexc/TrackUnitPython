@@ -25,5 +25,5 @@ jobs:
       run: |         
         echo $API_KEY >> api.key
         cat api.key | cut -c1-8
-        python -c $'import sys\nkey = sys.stdin.read()\nif len(key) == 32:\n   open("api.key","w").write(key)\nelse:\n   print("wrong length "+str(len(key)))\n   sys.exit(1)\n'
+        echo $API_KEY | python -c $'import sys\nkey = sys.stdin.read()\nif len(key) == 32:\n   open("api.key","w").write(key)\nelse:\n   print("wrong length "+str(len(key)))\n   sys.exit(1)\n'
         pytest

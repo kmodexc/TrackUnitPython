@@ -1,9 +1,9 @@
 """some additional helpers for trackunit"""
 
-import matplotlib.pyplot as plt
 from datetime import datetime
-import matplotlib.dates
 from copy import deepcopy
+import matplotlib.pyplot as plt
+import matplotlib.dates
 
 def plot_can_val(_data,valname):
     """plot value from getCanData"""

@@ -10,7 +10,8 @@ class TrackUnit:
     """TrackUnit class"""
     def __init__(self,api_key=None,verbose=False):
         if api_key is None:
-            api_key = open("api.key").readlines()[0]
+            with open("api.key",encoding="utf8") as file:
+                api_key = file.readline()
         self.cache = tucache.TuCache(('API',api_key))
         self.verbose = verbose
         self.req_period = 30
@@ -24,7 +25,7 @@ class TrackUnit:
         if self.verbose:
             print(req+"\t"+str(len(data)))
         return data
-    def unitList(self,type=None,sortByHours=True):
+    def get_unitlist(self,type=None,sortByHours=True):
         """unitList method"""
         data = self.get('Unit')
         if type is not None:
@@ -32,7 +33,7 @@ class TrackUnit:
         if sortByHours:
             data.sort(key=lambda x: (x['run1'] if 'run1' in x else 0),reverse=True)
         return data
-    def getHistory(self,vehId,tdelta=None,start=None,end=None,threads=1):
+    def get_history(self,vehId,tdelta=None,start=None,end=None,threads=1):
         """getHistory method"""
         if tdelta is None and start is not None and end is not None:
             days = (end-start).days
@@ -65,10 +66,10 @@ class TrackUnit:
                 if irange <= 0:
                     return []
                 start = end-timedelta(days=irange)
-            return self.getHistory(vehId,None,start,end,threads)
+            return self.get_history(vehId,None,start,end,threads)
         else:
             raise Exception("invalid argument combination of tdelta,start,end")
-    def getCanData(self,vehId,tdelta=None,start=None,end=None,threads=1):
+    def get_candata(self,vehId,tdelta=None,start=None,end=None,threads=1):
         """getCanData method"""
         if tdelta is None and start is not None and end is not None:
             days = (end-start).days
@@ -101,6 +102,6 @@ class TrackUnit:
                 if irange <= 0:
                     return []
                 start = end-timedelta(days=irange)
-            return self.getCanData(vehId,None,start,end,threads)
+            return self.get_candata(vehId,None,start,end,threads)
         else:
             raise Exception("invalid argument combination of tdelta,start,end")
