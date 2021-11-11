@@ -30,7 +30,7 @@ jobs:
       env:
         API_KEY: ${{ secrets.TRACKUNIT_API_KEY }}
       run: | 
-        echo "$API_KEY" > api.key
+        echo $API_KEY > api.key
         pytest
     - name: Build package
       run: python -m build
