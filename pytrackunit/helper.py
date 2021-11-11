@@ -61,7 +61,7 @@ def get_next_section(data,finsec,fendsec=None,min_insec_len=None,min_endsec_len=
             else:
                 out = []
                 off_sec_cnt = 0
-    if fendsec is None or min_endsec_len <= 0:
+    if (fendsec is None or min_endsec_len <= 0) and (min_insec_len is None or len(out) >= min_insec_len):
         return out
     return None
 
