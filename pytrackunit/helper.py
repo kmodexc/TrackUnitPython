@@ -71,11 +71,14 @@ def get_time_diff(timepoint_1,timepoint_2):
     dtt2 = datetime.strptime(timepoint_2.split('.')[0],"%Y-%m-%dT%H:%M:%S")
     return dtt1-dtt2
 
-def moving_avg(data,valname,alpha=0.01):
+def moving_avg(data,valname,alpha=0.01,in_same = False):
     """
     creates a copy of data where the valname index has a moving avg with alpha applied
     """
-    data2 = deepcopy(data)
+    if in_same:
+        data2 = data
+    else:
+        data2 = deepcopy(data)
     def fma(_x,last):
         return alpha*_x+(1-alpha)*last
     last = float(data[0][valname])
