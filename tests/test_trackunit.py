@@ -1,4 +1,4 @@
-from pytrackunit.TrackUnit import TrackUnit
+from pytrackunit.trackunit import TrackUnit
 def test_get():
 	tu = TrackUnit()
 	tu.cache.dir = "pytest-web-cache"
