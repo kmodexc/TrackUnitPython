@@ -1,3 +1,11 @@
+# --------------------------- Project Specifics ---------------------------------------------
+
+api.key
+web-cache/
+pytest/
+
+# --------------------------- General Python Template ----------------------------------------
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
