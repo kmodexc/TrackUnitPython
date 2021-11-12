@@ -3,7 +3,7 @@
 from math import ceil
 from multiprocessing import Pool
 from datetime import timedelta,datetime
-from . import tucache
+from .tucache import TuCache
 
 class TrackUnit:
     """TrackUnit class"""
@@ -11,7 +11,7 @@ class TrackUnit:
         if api_key is None:
             with open("api.key",encoding="utf8") as file:
                 api_key = file.readline()
-        self.cache = tucache.TuCache(('API',api_key))
+        self.cache = TuCache(('API',api_key))
         self.verbose = verbose
         self.req_period = 30
     def get(self,req):
