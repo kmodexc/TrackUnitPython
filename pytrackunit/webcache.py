@@ -31,8 +31,9 @@ def get_from_file(fname):
 
 class WebCache:
     """WebCache class"""
-    def __init__(self,auth=None,_dir=None):
+    def __init__(self,auth=None,_dir=None,verbose=False):
         self.auth = auth
+        self.verbose = verbose
         if _dir is None:
             self.dir = "web-cache"
         else:
@@ -63,4 +64,9 @@ class WebCache:
                 with open(fname,'w',encoding='utf8') as file:
                     file.write(resp.text)
             data = resp.json()
+            if self.verbose:
+                print(url,len(data),"W")
+        else:
+            if self.verbose:
+                print(url,len(data),"C")
         return data

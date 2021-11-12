@@ -11,7 +11,7 @@ class TrackUnit:
         if api_key is None:
             with open("api.key",encoding="utf8") as file:
                 api_key = file.readline()
-        self.cache = TuCache(('API',api_key))
+        self.cache = TuCache(('API',api_key),verbose=verbose)
         self.verbose = verbose
         self.req_period = 30
         self.tdelta_end = None
@@ -22,8 +22,6 @@ class TrackUnit:
         data = resp.get('list')
         if data is None:
             raise Exception("no data: "+str(resp))
-        if self.verbose:
-            print(req+"\t"+str(len(data)))
         return data
     def get_unitlist(self,_type=None,sort_by_hours=True):
         """unitList method"""

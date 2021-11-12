@@ -4,8 +4,8 @@ from .webcache import WebCache
 
 class TuCache:
     """tucache class"""
-    def __init__(self,auth=None,_dir=None):
-        self.cache = WebCache(auth=auth,_dir=_dir)
+    def __init__(self,auth=None,_dir=None,verbose=False):
+        self.cache = WebCache(auth=auth,_dir=_dir,verbose=verbose)
     def clean(self):
         """deletes all cached data"""
         self.cache.clean()
