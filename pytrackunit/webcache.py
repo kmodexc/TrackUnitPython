@@ -65,8 +65,8 @@ class WebCache:
                     file.write(resp.text)
             data = resp.json()
             if self.verbose:
-                print(url,len(data),"W")
+                print(url,len(str(data)),"W")
         else:
             if self.verbose:
-                print(url,len(data),"C")
+                print(url,len(str(data)),"C")
         return data
