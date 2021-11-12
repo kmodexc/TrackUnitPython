@@ -14,6 +14,7 @@ class TrackUnit:
         self.cache = TuCache(('API',api_key))
         self.verbose = verbose
         self.req_period = 30
+        self.tdelta_end = None
     def get(self,req):
         """get method"""
         url = r'https://api.trackunit.com/public/'+req
@@ -34,7 +35,10 @@ class TrackUnit:
         return data
     def general_daydiff_get(self,furl,tdelta,threads=1):
         """returns data for timedependant requests for a given daydelta"""
-        end = datetime.now()
+        if self.tdelta_end is None:
+            end = datetime.now()
+        else:
+            end = self.tdelta_end
         end = end.replace(hour=0,minute=0,second=0,microsecond=0)
         if isinstance(tdelta,datetime):
             start = end+tdelta
