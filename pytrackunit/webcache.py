@@ -9,10 +9,12 @@ from pathlib import Path
 import shutil
 import requests
 
-def get_from_file(fname):
+def get_from_file(fname,dont_read=False):
     """get_from_file method"""
     try:
         if os.path.isfile(fname):
+            if dont_read:
+                return {}
             try:
                 with open(fname,encoding='utf8') as file:
                     return json.load(file)
@@ -39,6 +41,7 @@ class WebCache:
         else:
             self.dir = _dir
         self.min_write_len = 0
+        self.dont_read_files = False
         Path(self.dir).mkdir(parents=True, exist_ok=True)
     def clean(self):
         """clean method"""
@@ -57,7 +60,7 @@ class WebCache:
     def get(self,url):
         """get method"""
         fname = join(self.dir,md5(url.encode('utf-8')).hexdigest()+".json")
-        data = get_from_file(fname)
+        data = get_from_file(fname,self.dont_read_files)
         if data is None:
             resp = self.get_from_web(url)
             if len(resp.text) > self.min_write_len:

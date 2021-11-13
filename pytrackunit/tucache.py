@@ -11,4 +11,7 @@ class TuCache:
         self.cache.clean()
     def get(self,url):
         """takes the data from cache if possible. otherwise data is loaded from web"""
-        return self.cache.get(url)
+        data = self.cache.get(url)
+        if len(data) == 0:
+            data["list"] = []
+        return data

@@ -74,3 +74,12 @@ def test_Get_WithFile():
 	data = cache.get(DUMMY_URL)
 	assert data["abilities"][0]["ability"]["name"] == "limber"
 	cache.clean()
+def test_Get_no_file_read():
+	cache = WebCache(_dir="pytest-web-cache")
+	cache.dont_read_files = True
+	cache.clean()
+	data = cache.get(DUMMY_URL)
+	assert data["abilities"][0]["ability"]["name"] == "limber"
+	data = cache.get(DUMMY_URL)
+	assert data == {}
+	cache.clean()
