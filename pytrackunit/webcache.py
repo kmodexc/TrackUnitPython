@@ -42,6 +42,8 @@ class WebCache:
             self.dir = _dir
         self.min_write_len = 0
         self.dont_read_files = False
+        self.dont_return_data = False
+        self.return_only_cache_files = False
         Path(self.dir).mkdir(parents=True, exist_ok=True)
     def clean(self):
         """clean method"""
@@ -60,6 +62,8 @@ class WebCache:
     def get(self,url):
         """get method"""
         fname = join(self.dir,md5(url.encode('utf-8')).hexdigest()+".json")
+        if self.return_only_cache_files:
+            return fname
         data = get_from_file(fname,self.dont_read_files)
         if data is None:
             resp = self.get_from_web(url)
@@ -72,4 +76,6 @@ class WebCache:
         else:
             if self.verbose:
                 print(url,len(str(data)),"C")
+        if self.dont_return_data:
+            return {}
         return data
