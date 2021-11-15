@@ -6,9 +6,17 @@ class TuCache:
     """tucache class"""
     def __init__(self,auth=None,_dir=None,verbose=False):
         self.cache = WebCache(auth=auth,_dir=_dir,verbose=verbose)
+        self._verbose = verbose
     def clean(self):
         """deletes all cached data"""
         self.cache.clean()
+    @property
+    def verbose(self):
+        return self._verbose
+    @verbose.setter
+    def verbose(self, value):
+        self.cache.verbose = value
+        self._verbose = value
     def get(self,url):
         """takes the data from cache if possible. otherwise data is loaded from web"""
         data = self.cache.get(url)
