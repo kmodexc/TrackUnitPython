@@ -24,13 +24,15 @@ For more features write an issue [here](https://github.com/einsteinmaster/TrackU
 
 Install the package via pip
 
-`pip install pytrackunit`
+``` sh
+pip install pytrackunit
+```
 
 Create a file in your execution directory with the name `api.key` which contains your TrackUnit API token. If that doesnt work for you, you can set the token in the constructor by calling `tu = TrackUnit(api_key="<your key>")`.
 
 ### Example
 
-```
+``` python
 from pytrackunit.helper import *
 from pytrackunit.TrackUnit import TrackUnit
 
