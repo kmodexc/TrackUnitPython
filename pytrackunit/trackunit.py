@@ -12,16 +12,16 @@ class TrackUnit:
             with open("api.key",encoding="utf8") as file:
                 api_key = file.readline()
         self.cache = TuCache(('API',api_key),verbose=verbose)
-        self._verbose = verbose
         self.req_period = 30
         self.tdelta_end = None
     @property
     def verbose(self):
-        return self._verbose
+        """returns verbose mode value. in verbose mode, diagnostic output is printed to console."""
+        return self.cache.cache.verbose
     @verbose.setter
     def verbose(self, value):
-        self.cache.verbose = value
-        self._verbose = value
+        """sets the verbose mode. in verbose mode, diagnostic output is printed to console."""
+        self.cache.cache.verbose = value
     def get(self,req):
         """get method"""
         url = r'https://api.trackunit.com/public/'+req

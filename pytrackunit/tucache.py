@@ -10,13 +10,6 @@ class TuCache:
     def clean(self):
         """deletes all cached data"""
         self.cache.clean()
-    @property
-    def verbose(self):
-        return self._verbose
-    @verbose.setter
-    def verbose(self, value):
-        self.cache.verbose = value
-        self._verbose = value
     def get(self,url):
         """takes the data from cache if possible. otherwise data is loaded from web"""
         data = self.cache.get(url)
