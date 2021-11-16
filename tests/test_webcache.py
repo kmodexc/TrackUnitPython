@@ -6,6 +6,7 @@ from os.path import isfile, join
 
 DUMMY_URL = 'https://pokeapi.co/api/v2/pokemon/ditto'
 DUMMY_RESPONSE_HASH = "3b28bef695a954335cadf285a6220b374bf5e947ef55102bea38823df53d2865"
+DATA_LEN = 21779
 
 def get_hash(x):
 	return hashlib.sha256(x.encode('ascii')).hexdigest()
@@ -82,4 +83,21 @@ def test_Get_no_file_read():
 	assert data["abilities"][0]["ability"]["name"] == "limber"
 	data = cache.get(DUMMY_URL)
 	assert data == {}
+	cache.clean()
+def test_Get_verbose(capsys):
+	cache = WebCache(_dir="pytest-web-cache",verbose=True)
+	cache.clean()
+	data = cache.get(DUMMY_URL)
+	captured = capsys.readouterr()
+	assert captured.out == DUMMY_URL+" "+str(DATA_LEN)+" W\n"
+	data = cache.get(DUMMY_URL)
+	captured = capsys.readouterr()
+	assert captured.out == DUMMY_URL+" "+str(DATA_LEN)+" C\n"
+	cache.clean()
+def test_return_hashes():
+	cache = WebCache(_dir="pytest-web-cache",verbose=True)
+	cache.return_only_cache_files = True
+	cache.clean()
+	data = cache.get(DUMMY_URL)
+	assert data == "70551c7a431274e4617c94ad307346d2.json"
 	cache.clean()

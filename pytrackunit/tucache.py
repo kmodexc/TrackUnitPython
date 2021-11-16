@@ -13,6 +13,10 @@ class TuCache:
     def get(self,url):
         """takes the data from cache if possible. otherwise data is loaded from web"""
         data = self.cache.get(url)
-        if len(data) == 0:
-            data["list"] = []
-        return data
+        if self.cache.return_only_cache_files:
+            return [data]
+        if self.cache.dont_return_data:
+            return []
+        if self.cache.dont_read_files and len(data) == 0:
+            return []
+        return data.get('list')

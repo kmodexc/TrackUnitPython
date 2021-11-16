@@ -1,5 +1,7 @@
 """module TrackUnit"""
 
+import json
+import os.path
 from math import ceil
 from multiprocessing import Pool
 from datetime import timedelta,datetime
@@ -7,11 +9,20 @@ from .tucache import TuCache
 
 class TrackUnit:
     """TrackUnit class"""
-    def __init__(self,api_key=None,verbose=False):
+    def __init__(self,config_filename=None,api_key=None,verbose=False):
+        if config_filename is None:
+            config_filename = "config.json"
+        config = {}
+        if os.path.isfile(config_filename):
+            with open(config_filename,encoding="utf8") as file:
+                config = json.load(file)
+        else:
+            config["apikey-location"] = "api.key"
+            config["webcache-location"] = "web-cache"
         if api_key is None:
-            with open("api.key",encoding="utf8") as file:
-                api_key = file.readline()
-        self.cache = TuCache(('API',api_key),verbose=verbose)
+            with open(config["apikey-location"],encoding="utf8") as file_apikey:
+                api_key = file_apikey.readline()
+        self.cache = TuCache(('API',api_key),_dir=config["webcache-location"],verbose=verbose)
         self.req_period = 30
         self.tdelta_end = None
     @property
@@ -25,10 +36,9 @@ class TrackUnit:
     def get(self,req):
         """get method"""
         url = r'https://api.trackunit.com/public/'+req
-        resp = self.cache.get(url)
-        data = resp.get('list')
+        data = self.cache.get(url)
         if data is None:
-            raise Exception("no data: "+str(resp))
+            raise Exception("no data: "+str(data))
         return data
     def get_unitlist(self,_type=None,sort_by_hours=True):
         """unitList method"""

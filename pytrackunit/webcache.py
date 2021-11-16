@@ -61,9 +61,10 @@ class WebCache:
         return resp
     def get(self,url):
         """get method"""
-        fname = join(self.dir,md5(url.encode('utf-8')).hexdigest()+".json")
+        fname = md5(url.encode('utf-8')).hexdigest()+".json"
         if self.return_only_cache_files:
             return fname
+        fname = join(self.dir,fname)
         data = get_from_file(fname,self.dont_read_files)
         if data is None:
             resp = self.get_from_web(url)
