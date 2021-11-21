@@ -57,3 +57,6 @@ def test_Get_return_hashes():
 	data = cache.get(DUMMY_URL)
 	assert len(data) == 1
 	assert data[0] == "70551c7a431274e4617c94ad307346d2.json"
+def test_db():
+	cache = TuCache(_dir="pytest-web-cache",use_sqlite=True)
+

@@ -5,8 +5,8 @@ from os import listdir
 from os.path import isfile, join
 
 DUMMY_URL = 'https://pokeapi.co/api/v2/pokemon/ditto'
-DUMMY_RESPONSE_HASH = "3b28bef695a954335cadf285a6220b374bf5e947ef55102bea38823df53d2865"
-DATA_LEN = 21779
+DUMMY_RESPONSE_HASH = "493d9c6b65e19a64514d98a0515418f577c3a035300dc11423e2747591109764"
+DATA_LEN = 23291
 
 def get_hash(x):
 	return hashlib.sha256(x.encode('ascii')).hexdigest()
