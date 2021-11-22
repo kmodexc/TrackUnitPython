@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from math import ceil
 from .webcache import WebCache
-from .tuiter import ReqIter
+from .tuiter import ReqIter, TuIter
 
 URL_BASE = r'https://api.trackunit.com/public/'
 
@@ -51,7 +51,12 @@ class TuCache:
             requests.append(furl(\
                 wstart.strftime("%Y-%m-%dT%H:%M:%S"),\
                 wend.strftime("%Y-%m-%dT%H:%M:%S")))
-        return ReqIter(self,iter(requests),previter)
+        internal_iter = ReqIter(self,iter(requests))
+        if previter is None:
+            previter = TuIter()
+        previter.add(internal_iter)
+        return previter,len(requests)
+
     def get_history(self,veh_id,tdelta,previter=None):
         """getHistory method"""
         return self.general_daydiff_get(lambda t1,t2: \

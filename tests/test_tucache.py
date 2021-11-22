@@ -64,10 +64,11 @@ def test_getcandata_check_urls():
 	cache = TuCache(_dir="pytest-web-cache")
 	cache.tdelta_end = datetime(2021,11,15,10,0,0,0)
 	cache.cache = CacheForTests()
-	asyncio.run(tolist(cache.get_candata("3331359",tdelta=100)))
+	_it,_l = cache.get_candata("3331359",tdelta=100)
+	assert _l == 4
+	asyncio.run(tolist(_it))
 	assert len(cache.cache.urls) == 4
 	assert cache.cache.urls[0] == BASE_URL+"&from=2021-08-07T00:00:00.0000001Z&to=2021-09-06T00:00:00.0000000Z"
 	assert cache.cache.urls[1] == BASE_URL+"&from=2021-09-06T00:00:00.0000001Z&to=2021-10-06T00:00:00.0000000Z"
 	assert cache.cache.urls[2] == BASE_URL+"&from=2021-10-06T00:00:00.0000001Z&to=2021-11-05T00:00:00.0000000Z"
 	assert cache.cache.urls[3] == BASE_URL+"&from=2021-11-05T00:00:00.0000001Z&to=2021-11-15T00:00:00.0000000Z"
-

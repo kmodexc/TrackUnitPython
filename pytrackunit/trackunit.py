@@ -43,14 +43,16 @@ class TrackUnit:
     async def _a_get_history(self,veh_id,tdelta):
         """async getHistory method"""
         data = []
-        async for _d in self.cache.get_history(veh_id,tdelta):
+        _it, _ = self.cache.get_history(veh_id,tdelta)
+        async for _d in _it:
             data += _d
         return data
 
     async def _a_get_candata(self,veh_id,tdelta=None):
         """async getCanData method"""
         data = []
-        async for _d in self.cache.get_candata(veh_id,tdelta):
+        _it, _ = self.cache.get_candata(veh_id,tdelta)
+        async for _d in _it:
             data += _d
         return data
 
