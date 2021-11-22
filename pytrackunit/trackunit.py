@@ -3,7 +3,36 @@
 import json
 import os.path
 import asyncio
+import tqdm
 from .tucache import TuCache
+
+def get_multi_general(func,idlist,tdelta,f_process=None,progress_bar=True):
+    """
+    returns the data of a list of vehicles with the ids provided in idlist.
+    f_process can be specified to process slices of data. f_process returns a list
+    """
+    if f_process is None:
+        f_process = lambda x: x
+
+    async def get_data_async(globit,globlen):
+        _cor = []
+        if progress_bar:
+            pbar = tqdm.tqdm(total=globlen)
+        async for _f in globit:
+            _cor += f_process(_f)
+            if progress_bar:
+                pbar.update()
+        return _cor
+
+    globlen = 0
+    last = None
+    for _id in idlist:
+        last,_l = func(_id,tdelta,last)
+        globlen += _l
+
+    data = asyncio.run(get_data_async(last,globlen))
+
+    return data
 
 class TrackUnit:
     """TrackUnit class"""
@@ -63,3 +92,19 @@ class TrackUnit:
     def get_candata(self,veh_id,tdelta=None):
         """getCanData method"""
         return asyncio.run(self._a_get_candata(veh_id,tdelta))
+
+    def get_multi_history(self,idlist,tdelta,f_process=None,progress_bar=True):
+        """
+        returns the data of a list of vehicles with the ids provided in idlist.
+        f_process can be specified to process slices of data. f_process returns a list
+        """
+        return get_multi_general(
+            self.cache.get_history,idlist,tdelta,f_process,progress_bar)
+
+    def get_multi_candata(self,idlist,tdelta,f_process=None,progress_bar=True):
+        """
+        returns the data of a list of vehicles with the ids provided in idlist.
+        f_process can be specified to process slices of data. f_process returns a list
+        """
+        return get_multi_general(
+            self.cache.get_candata,idlist,tdelta,f_process,progress_bar)

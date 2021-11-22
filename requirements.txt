@@ -5,3 +5,4 @@ pylint
 matplotlib
 aiohttp
 aiofiles
+tqdm
