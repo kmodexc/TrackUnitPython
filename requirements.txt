@@ -3,3 +3,5 @@ setuptools
 pytest
 pylint
 matplotlib
+aiohttp
+aiofiles

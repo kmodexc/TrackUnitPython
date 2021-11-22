@@ -3,10 +3,10 @@ import os.path
 import hashlib
 from os import listdir
 from os.path import isfile, join
+import asyncio
 
 DUMMY_URL = 'https://pokeapi.co/api/v2/pokemon/ditto'
-DUMMY_RESPONSE_HASH = "493d9c6b65e19a64514d98a0515418f577c3a035300dc11423e2747591109764"
-DATA_LEN = 23291
+DUMMY_URL_HASH = "70551c7a431274e4617c94ad307346d2"
 
 def get_hash(x):
 	return hashlib.sha256(x.encode('ascii')).hexdigest()
@@ -29,7 +29,7 @@ def test_Clean():
 def test_GetFromFile_Clean():
 	cache = WebCache(_dir="pytest-web-cache")
 	cache.clean()
-	data = get_from_file('asdf')
+	data = asyncio.run(get_from_file('asdf'))
 	assert data is None
 	cache.clean()
 def test_GetFromFile_WithFile():
@@ -41,11 +41,11 @@ def test_GetFromFile_WithFile():
 	f.flush()
 	f.close()
 	assert os.path.exists(fname)
-	data = get_from_file(fname)
+	data = asyncio.run(get_from_file(fname))
 	assert data["data"] == "data"
 	cache.clean()
 def test_GetFromFile_With_incorrect_File():
-	cache = WebCache(_dir="pytest-web-cache")
+	cache = WebCache(_dir="pytest-web-cache",verbose=True)
 	cache.clean()
 	fname = os.path.join(cache.dir,"asdf.txt")
 	f = open(fname,"w",encoding='utf8')
@@ -53,51 +53,51 @@ def test_GetFromFile_With_incorrect_File():
 	f.flush()
 	f.close()
 	assert os.path.exists(fname)
-	data = get_from_file(fname)
+	data = asyncio.run(get_from_file(fname))
 	assert data is None
-	cache.clean()
-def test_GetFromWeb():
-	cache = WebCache(_dir="pytest-web-cache")
-	data = cache.get_from_web(DUMMY_URL).text
-	data_hash = get_hash(data)
-	assert data_hash == DUMMY_RESPONSE_HASH
-	cache.clean()
 def test_Get_Clean():
 	cache = WebCache(_dir="pytest-web-cache")
 	cache.clean()
-	data = cache.get(DUMMY_URL)
+	data = asyncio.run(cache.get(DUMMY_URL))
 	cache.clean()
 def test_Get_WithFile():
 	cache = WebCache(_dir="pytest-web-cache")
 	cache.clean()
-	data = cache.get(DUMMY_URL)
+	data = asyncio.run(cache.get(DUMMY_URL))
 	assert data["abilities"][0]["ability"]["name"] == "limber"
-	data = cache.get(DUMMY_URL)
+	data = asyncio.run(cache.get(DUMMY_URL))
 	assert data["abilities"][0]["ability"]["name"] == "limber"
 	cache.clean()
 def test_Get_no_file_read():
 	cache = WebCache(_dir="pytest-web-cache")
 	cache.dont_read_files = True
 	cache.clean()
-	data = cache.get(DUMMY_URL)
+	data = asyncio.run(cache.get(DUMMY_URL))
 	assert data["abilities"][0]["ability"]["name"] == "limber"
-	data = cache.get(DUMMY_URL)
+	data = asyncio.run(cache.get(DUMMY_URL))
 	assert data == {}
 	cache.clean()
+def test_Get_write_file():
+	cache = WebCache(_dir="pytest-web-cache",verbose=True)
+	fname = os.path.join(cache.dir,DUMMY_URL_HASH+".json")
+	cache.clean()
+	data = asyncio.run(cache.get(DUMMY_URL))
+	data = asyncio.run(get_from_file(fname))
+	assert data["abilities"][0]["ability"]["name"] == "limber"
 def test_Get_verbose(capsys):
 	cache = WebCache(_dir="pytest-web-cache",verbose=True)
 	cache.clean()
-	data = cache.get(DUMMY_URL)
+	data = asyncio.run(cache.get(DUMMY_URL))
 	captured = capsys.readouterr()
-	assert captured.out == DUMMY_URL+" "+str(DATA_LEN)+" W\n"
-	data = cache.get(DUMMY_URL)
+	assert captured.out.split(' ')[0] == DUMMY_URL
+	assert captured.out.split(' ')[2] == "W\n"
+	data = asyncio.run(cache.get(DUMMY_URL))
 	captured = capsys.readouterr()
-	assert captured.out == DUMMY_URL+" "+str(DATA_LEN)+" C\n"
-	cache.clean()
+	assert captured.out.split(' ')[0] == DUMMY_URL
+	assert captured.out.split(' ')[2] == "C\n"
 def test_return_hashes():
 	cache = WebCache(_dir="pytest-web-cache",verbose=True)
+	cache.clean()
 	cache.return_only_cache_files = True
-	cache.clean()
-	data = cache.get(DUMMY_URL)
-	assert data == "70551c7a431274e4617c94ad307346d2.json"
-	cache.clean()
+	data = asyncio.run(cache.get(DUMMY_URL))
+	assert data == DUMMY_URL_HASH+".json"

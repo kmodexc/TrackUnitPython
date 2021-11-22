@@ -4,7 +4,8 @@ requires = [
 	"setuptools",
 	"wheel",
 	"matplotlib",
-	"requests",
+	"aiohttp",
+	"aiofiles",
 	"pytest"
 ]
 build-backend = "setuptools.build_meta"
