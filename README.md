@@ -14,7 +14,10 @@ This packages contains some usefull functions for an easy interface to TrackUnit
 
 Features:
 - caches requests for faster access
-- for timespan's bigger than 30 days it sufficiantly devides it into allowd requests 
+- for timespan's bigger than 30 days it sufficiantly devides it into allowed requests
+- processing big datasets more efficient by preprocessing per dataslice
+- makes use of asyncio
+- if data is cached it can process 12000 cached requests with 20 million data points in under 5 minutes.
 
 For more features write an issue [here](https://github.com/einsteinmaster/TrackUnitPython/issues/new). Pull requests are welcome.
 
@@ -51,4 +54,14 @@ history = tu.get_history(vehicles[0]['id'],100)
 # Get extended data 'Report/UnitExtendedInfo'
 # Gets the history for the last 100 days
 data = tu.get_candata(vehicles[0]['id'],100)
+
+# The library supports processing multiple vehicles too
+# For memory intensive requests it supports preprocessing requests
+# Preprocessing is done with a function taking a list and returning a list.
+# By default it prints a progress bar when using this function.
+units = ["123456","456789"]
+def process_slice(_slice):
+    return list(map(lambda x: (x["time"],x["externalPower"]),_slice))
+data = tu.get_multi_history( units, 365, process_slice)
+
 ```
