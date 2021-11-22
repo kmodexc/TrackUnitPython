@@ -21,6 +21,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     packages=["pytrackunit"],
-    install_requires=["pyparsing<3","matplotlib", "requests"],
+    install_requires=["pyparsing<3","matplotlib", "aiohttp", "aiofiles"],
     python_requires=">=3.6",
 )
