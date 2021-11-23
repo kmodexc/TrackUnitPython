@@ -26,8 +26,9 @@ class TuCache:
         if self.cache.dont_read_files and len(data) == 0:
             return []
         return data.get('list')
-    def general_daydiff_get(self,furl,tdelta,previter=None):
+    def general_daydiff_get(self,furl,meta,previter=None):
         """returns data for timedependant requests for a given daydelta"""
+        tdelta = meta["tdelta"]
         if self.tdelta_end is None:
             end = datetime.now()
         else:
@@ -40,9 +41,13 @@ class TuCache:
             if irange <= 0:
                 return []
             start = end-timedelta(days=irange)
-        return self.general_time_range_get(furl,start,end,previter)
-    def general_time_range_get(self,furl,start=None,end=None,previter=None):
+        meta["start"] = start
+        meta["end"] = end
+        return self.general_time_range_get(furl,meta,previter)
+    def general_time_range_get(self,furl,meta,previter=None,):
         """returns data for timedependant requests for a start and enddate"""
+        start = meta["start"]
+        end = meta["end"]
         days = (end-start).days
         requests = []
         for week in range(ceil(days/self.req_period)):
@@ -51,7 +56,7 @@ class TuCache:
             requests.append(furl(\
                 wstart.strftime("%Y-%m-%dT%H:%M:%S"),\
                 wend.strftime("%Y-%m-%dT%H:%M:%S")))
-        internal_iter = ReqIter(self,iter(requests))
+        internal_iter = ReqIter(self,iter(requests),meta)
         if previter is None:
             previter = TuIter()
         previter.add(internal_iter)
@@ -59,11 +64,17 @@ class TuCache:
 
     def get_history(self,veh_id,tdelta,previter=None):
         """getHistory method"""
+        meta = {}
+        meta["id"] = veh_id
+        meta["tdelta"] = tdelta
         return self.general_daydiff_get(lambda t1,t2: \
             'Report/UnitHistory?unitId='+veh_id+'&from='+t1+'.0000001Z&to='+t2+'.0000000Z',\
-                tdelta,previter)
+                meta,previter)
     def get_candata(self,veh_id,tdelta=None,previter=None):
         """getCanData method"""
+        meta = {}
+        meta["id"] = veh_id
+        meta["tdelta"] = tdelta
         return self.general_daydiff_get(lambda t1,t2: \
             'Report/UnitExtendedInfo?Id='+veh_id+'&from='+t1+'.0000001Z&to='+t2+'.0000000Z',\
-                tdelta,previter)
+                meta,previter)

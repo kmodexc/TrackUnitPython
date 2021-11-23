@@ -2,10 +2,11 @@
 
 class ReqIter:
     """iterator for web (url) requests"""
-    def __init__(self,cache,requests):
+    def __init__(self,cache,requests,meta=None):
         self.cache = cache
         self.requests = requests
         self.iter_started = False
+        self.meta = meta
 
     def __aiter__(self):
         if self.iter_started:
@@ -15,15 +16,16 @@ class ReqIter:
 
     async def __anext__(self):
         try:
-            return await self.cache.get_url(next(self.requests))
+            return await self.cache.get_url(next(self.requests)) , self.meta
         except StopIteration as exc:
             raise StopAsyncIteration from exc
 
 class SqlIter:
     """iterator for tucache data"""
-    def __init__(self, sqliter):
+    def __init__(self, sqliter, meta=None):
         self.sqliter = sqliter
         self.iter_started = False
+        self.meta = meta
 
     def __aiter__(self):
         if self.iter_started:
@@ -33,7 +35,7 @@ class SqlIter:
 
     async def __anext__(self):
         try:
-            return next(self.sqliter)
+            return next(self.sqliter) , self.meta
         except StopIteration as exc:
             raise StopAsyncIteration from exc
 

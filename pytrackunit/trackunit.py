@@ -18,8 +18,8 @@ def get_multi_general(func,idlist,tdelta,f_process=None,progress_bar=True):
         _cor = []
         if progress_bar:
             pbar = tqdm.tqdm(total=globlen)
-        async for _f in globit:
-            _cor += f_process(_f)
+        async for _f, meta in globit:
+            _cor += f_process(_f, meta)
             if progress_bar:
                 pbar.update()
         return _cor
@@ -73,7 +73,7 @@ class TrackUnit:
         """async getHistory method"""
         data = []
         _it, _ = self.cache.get_history(veh_id,tdelta)
-        async for _d in _it:
+        async for _d,_ in _it:
             data += _d
         return data
 
@@ -81,7 +81,7 @@ class TrackUnit:
         """async getCanData method"""
         data = []
         _it, _ = self.cache.get_candata(veh_id,tdelta)
-        async for _d in _it:
+        async for _d,_ in _it:
             data += _d
         return data
 

@@ -57,11 +57,13 @@ data = tu.get_candata(vehicles[0]['id'],100)
 
 # The library supports processing multiple vehicles too
 # For memory intensive requests it supports preprocessing requests
-# Preprocessing is done with a function taking a list and returning a list.
+# Preprocessing is done with a function taking a list and a dict and returning a list.
 # By default it prints a progress bar when using this function.
+# Besides the data wich was returned by trackunit, process_slice gets some meta-
+# data about the query which produced the _slice data.
 units = ["123456","456789"]
-def process_slice(_slice):
-    return list(map(lambda x: (x["time"],x["externalPower"]),_slice))
+def process_slice(_slice,meta):
+    return list(map(lambda x: (meta["id"],x["time"],x["externalPower"]),_slice))
 data = tu.get_multi_history( units, 365, process_slice)
 
 ```
