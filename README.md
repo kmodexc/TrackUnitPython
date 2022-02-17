@@ -55,6 +55,10 @@ history = tu.get_history(vehicles[0]['id'],100)
 # Gets the history for the last 100 days
 data = tu.get_candata(vehicles[0]['id'],100)
 
+# Get faults 'Report/UnitActiveFaults'
+# Gets the history for the last 100 days
+data = tu.get_faults(vehicles[0]['id'],100)
+
 # The library supports processing multiple vehicles too
 # For memory intensive requests it supports preprocessing requests
 # Preprocessing is done with a function taking a list and a dict and returning a list.
