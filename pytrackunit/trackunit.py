@@ -85,6 +85,14 @@ class TrackUnit:
             data += _d
         return data
 
+    async def _a_get_faults(self,veh_id,tdelta=None):
+        """async get_faults method"""
+        data = []
+        _it, _ = self.cache.get_faults(veh_id,tdelta)
+        async for _d,_ in _it:
+            data += _d
+        return data
+
     def get_history(self,veh_id,tdelta):
         """getHistory method"""
         return asyncio.run(self._a_get_history(veh_id,tdelta))
@@ -92,6 +100,10 @@ class TrackUnit:
     def get_candata(self,veh_id,tdelta=None):
         """getCanData method"""
         return asyncio.run(self._a_get_candata(veh_id,tdelta))
+
+    def get_faults(self,veh_id,tdelta=None):
+        """get_faults method"""
+        return asyncio.run(self._a_get_faults(veh_id,tdelta))
 
     def get_multi_history(self,idlist,tdelta,f_process=None,progress_bar=True):
         """
@@ -108,3 +120,11 @@ class TrackUnit:
         """
         return get_multi_general(
             self.cache.get_candata,idlist,tdelta,f_process,progress_bar)
+
+    def get_multi_faults(self,idlist,tdelta,f_process=None,progress_bar=True):
+        """
+        returns the data of a list of vehicles with the ids provided in idlist.
+        f_process can be specified to process slices of data. f_process returns a list
+        """
+        return get_multi_general(
+            self.cache.get_faults,idlist,tdelta,f_process,progress_bar)

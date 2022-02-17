@@ -36,6 +36,12 @@ def test_getcandata():
 	tu.cache.clean()
 	data = tu.get_candata("3331359",tdelta=100)
 	assert len(data) > 10000
+def test_getfaults():
+	tu = TrackUnit()
+	tu.cache.dir = "pytest-web-cache"
+	tu.cache.clean()
+	data = tu.get_faults("3331359",tdelta=100)
+	assert len(data) > 10
 def test_getcandata_no_file_read():
 	tu = TrackUnit()
 	tu.cache.cache.dont_read_files = True

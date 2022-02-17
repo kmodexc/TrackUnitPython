@@ -78,3 +78,11 @@ class TuCache:
         return self.general_daydiff_get(lambda t1,t2: \
             'Report/UnitExtendedInfo?Id='+veh_id+'&from='+t1+'.0000001Z&to='+t2+'.0000000Z',\
                 meta,previter)
+    def get_faults(self,veh_id,tdelta=None,previter=None):
+        """get_faults method"""
+        meta = {}
+        meta["id"] = veh_id
+        meta["tdelta"] = tdelta
+        return self.general_daydiff_get(lambda t1,t2: \
+            'Report/UnitActiveFaults?id='+veh_id+'&from='+t1+'.0000001Z&to='+t2+'.0000000Z',\
+                meta,previter)
