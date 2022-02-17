@@ -4,9 +4,14 @@ import hashlib
 from os import listdir
 from os.path import isfile, join
 import asyncio
+from platform import system
 
 DUMMY_URL = 'https://pokeapi.co/api/v2/pokemon/ditto'
 DUMMY_URL_HASH = "70551c7a431274e4617c94ad307346d2"
+
+# This will remove error "message loop closed" under windows
+if system() == "Windows":
+	asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 def get_hash(x):
 	return hashlib.sha256(x.encode('ascii')).hexdigest()
@@ -81,17 +86,17 @@ def test_Get_write_file():
 	cache = WebCache(_dir="pytest-web-cache",verbose=True)
 	fname = os.path.join(cache.dir,DUMMY_URL_HASH+".json")
 	cache.clean()
-	data = asyncio.run(cache.get(DUMMY_URL))
-	data = asyncio.run(get_from_file(fname))
-	assert data["abilities"][0]["ability"]["name"] == "limber"
+	data1 = asyncio.run(cache.get(DUMMY_URL))
+	data2 = asyncio.run(get_from_file(fname))
+	assert data2["abilities"][0]["ability"]["name"] == "limber"
 def test_Get_verbose(capsys):
 	cache = WebCache(_dir="pytest-web-cache",verbose=True)
 	cache.clean()
-	data = asyncio.run(cache.get(DUMMY_URL))
+	data1 = asyncio.run(cache.get(DUMMY_URL))
 	captured = capsys.readouterr()
 	assert captured.out.split(' ')[0] == DUMMY_URL
 	assert captured.out.split(' ')[2] == "W\n"
-	data = asyncio.run(cache.get(DUMMY_URL))
+	data2 = asyncio.run(cache.get(DUMMY_URL))
 	captured = capsys.readouterr()
 	assert captured.out.split(' ')[0] == DUMMY_URL
 	assert captured.out.split(' ')[2] == "C\n"
