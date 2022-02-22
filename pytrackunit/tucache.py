@@ -44,7 +44,7 @@ class TuCache:
         meta["start"] = start
         meta["end"] = end
         return self.general_time_range_get(furl,meta,previter)
-    def general_time_range_get(self,furl,meta,previter=None,):
+    def general_time_range_get(self,furl,meta,previter=None):
         """returns data for timedependant requests for a start and enddate"""
         start = meta["start"]
         end = meta["end"]
@@ -84,5 +84,14 @@ class TuCache:
         meta["id"] = veh_id
         meta["tdelta"] = tdelta
         return self.general_daydiff_get(lambda t1,t2: \
+            'Report/UnitActiveFaults?id='+veh_id+'&from='+t1+'.0000001Z&to='+t2+'.0000000Z',\
+                meta,previter)
+    def get_faults_timedelta(self,veh_id,start,end,previter=None):
+        """get_faults method"""
+        meta = {}
+        meta["id"] = veh_id
+        meta["start"] = start
+        meta["end"] = end
+        return self.general_time_range_get(lambda t1,t2: \
             'Report/UnitActiveFaults?id='+veh_id+'&from='+t1+'.0000001Z&to='+t2+'.0000000Z',\
                 meta,previter)
