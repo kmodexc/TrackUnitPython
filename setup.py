@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="pytrackunit",
-    version="2.2.2",
+    version="2.3.0",
     author="Marius Schlueter",
     author_email="themrslue@googlemail.com",
     description="Easy access for TrackUnit REST API",
@@ -22,5 +22,5 @@ setuptools.setup(
     ],
     packages=["pytrackunit"],
     install_requires=["pyparsing<3","matplotlib", "aiohttp", "aiofiles", "tqdm"],
-    python_requires=">=3.6",
+    python_requires=">=3.10",
 )

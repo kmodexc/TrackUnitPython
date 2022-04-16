@@ -4,6 +4,7 @@ from datetime import datetime
 from copy import deepcopy
 import matplotlib.pyplot as plt
 import matplotlib.dates
+from  dateutil.parser.isoparser import isoparse
 
 def plot_can_val(_data,valname):
     """plot value from getCanData"""
@@ -12,7 +13,8 @@ def plot_can_val(_data,valname):
 
 def get_datetime(time_string):
     """transforms trackunit time string to datetime"""
-    return datetime.strptime(time_string.split('.')[0],"%Y-%m-%dT%H:%M:%S")
+    #return datetime.strptime(time_string.split('.')[0],"%Y-%m-%dT%H:%M:%S")
+    return isoparse(time_string)
 
 def plot_val(_data,valname):
     """plots a value from data (expected format from getHistory)"""
