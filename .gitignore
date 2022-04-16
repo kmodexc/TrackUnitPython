@@ -5,6 +5,8 @@ web-cache/
 pytest-web-cache/
 *.sqlite
 test.py
+*.db
+*.png
 
 # --------------------------- General Python Template ----------------------------------------
 

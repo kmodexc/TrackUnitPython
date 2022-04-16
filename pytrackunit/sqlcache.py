@@ -3,7 +3,7 @@
 import sqlite3
 import os.path
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pytrackunit.tucache import TuCache
 from pytrackunit.tuiter import SqlIter, TuIter
 from pytrackunit.helper import get_datetime
@@ -144,6 +144,7 @@ class SqlCache:
         self.web_db_path = db_file
         self._db = sqlite3.connect(self.web_db_path)
         self.cache = upstream_cache
+        self.tdelta_end = None
         if self.cache is None:
             self.cache = TuCache(auth,_dir,verbose=True)
         if create_tables:
@@ -265,3 +266,21 @@ class SqlCache:
                     (veh_id,start_ts,end_ts))),meta))
 
         return previter, cnt
+    def get_faults(self,veh_id,tdelta=None,previter=None):
+        """get_faults method"""
+        if self.tdelta_end is None:
+            end = datetime.now()
+        else:
+            end = self.tdelta_end
+        end = end.replace(hour=0,minute=0,second=0,microsecond=0)
+        if isinstance(tdelta,datetime):
+            start = end+tdelta
+        else:
+            irange = int(tdelta)
+            if irange <= 0:
+                return []
+            start = end-timedelta(days=irange)
+        return self.get_errors(veh_id,start,end,previter)
+    def get_faults_timedelta(self,veh_id,start,end,previter=None):
+        """get_faults_timedelta"""
+        return self.get_errors(veh_id,start,end,previter)
