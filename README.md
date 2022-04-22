@@ -1,12 +1,11 @@
 # TrackUnitPython
-Python API for Trackunit
-
 
 ![test](https://github.com/einsteinmaster/TrackUnitPython/actions/workflows/test.yml/badge.svg)
-
 ![lint](https://github.com/einsteinmaster/TrackUnitPython/actions/workflows/pylint.yml/badge.svg)
-
 ![upload](https://github.com/einsteinmaster/TrackUnitPython/actions/workflows/python-publish.yml/badge.svg)
+
+
+Python API for Trackunit
 
 ## What is this package
 
