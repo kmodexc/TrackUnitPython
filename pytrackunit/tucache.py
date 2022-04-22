@@ -60,11 +60,29 @@ class TuCache:
         return self.general_daydiff_get(lambda t1,t2: \
             'Report/UnitHistory?unitId='+veh_id+'&from='+t1+'.0000001Z&to='+t2+'.0000000Z',\
                 meta,previter)
+    def get_history_timedelta(self,veh_id,start,end,previter=None):
+        """getHistory method"""
+        meta = {}
+        meta["id"] = veh_id
+        meta["start"] = start
+        meta["end"] = end
+        return self.general_daydiff_get(lambda t1,t2: \
+            'Report/UnitHistory?unitId='+veh_id+'&from='+t1+'.0000001Z&to='+t2+'.0000000Z',\
+                meta,previter)
     def get_candata(self,veh_id,tdelta=None,previter=None):
         """getCanData method"""
         meta = {}
         meta["id"] = veh_id
         meta["tdelta"] = tdelta
+        return self.general_daydiff_get(lambda t1,t2: \
+            'Report/UnitExtendedInfo?Id='+veh_id+'&from='+t1+'.0000001Z&to='+t2+'.0000000Z',\
+                meta,previter)
+    def get_candata_timedelta(self,veh_id,start,end,previter=None):
+        """getCanData method"""
+        meta = {}
+        meta["id"] = veh_id
+        meta["start"] = start
+        meta["end"] = end
         return self.general_daydiff_get(lambda t1,t2: \
             'Report/UnitExtendedInfo?Id='+veh_id+'&from='+t1+'.0000001Z&to='+t2+'.0000000Z',\
                 meta,previter)
