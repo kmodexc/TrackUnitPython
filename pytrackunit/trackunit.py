@@ -60,18 +60,14 @@ class TrackUnit:
         """sets the verbose mode. in verbose mode, diagnostic output is printed to console."""
         self.cache.cache.verbose = value
 
-    async def _a_get_unitlist(self,_type=None,sort_by_hours=True):
+    def get_unitlist(self,_type=None,sort_by_hours=True):
         """unitList method"""
-        data = await self.cache.get_url('Unit')
+        data = asyncio.run(self.cache.get_url('Unit'))
         if _type is not None:
             data = list(filter(lambda x: " " in x['name'] and _type in x['name'],data))
         if sort_by_hours:
             data.sort(key=lambda x: (x['run1'] if 'run1' in x else 0),reverse=True)
         return data
-
-    def get_unitlist(self,_type=None,sort_by_hours=True):
-        """unitList method"""
-        return asyncio.run(self._a_get_unitlist(_type,sort_by_hours))
 
     async def _a_get_history(self,veh_id,tdelta):
         """async getHistory method"""
