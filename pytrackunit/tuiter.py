@@ -57,6 +57,8 @@ class TuIter:
         return self
 
     async def __anext__(self):
+        if len(self.iterators) == 0:
+            raise StopAsyncIteration
         try:
             return await self.iterators[self.iterator_pos].__anext__()
         except StopAsyncIteration as exc:
