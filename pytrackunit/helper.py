@@ -1,6 +1,6 @@
 """some additional helpers for trackunit"""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from copy import deepcopy
 import matplotlib.pyplot as plt
 import matplotlib.dates
@@ -96,3 +96,18 @@ def moving_avg(data,valname,alpha=0.01,in_same = False):
         last = fma(float(datapoint[valname]),last)
         datapoint[valname] = str(last)
     return data2
+
+def start_end_from_tdelta(tdelta, preset_end=None):
+    if preset_end is None:
+        end = datetime.now()
+    else:
+        end = preset_end
+    end = end.replace(hour=0,minute=0,second=0,microsecond=0)
+    if isinstance(tdelta,timedelta):
+        start = end-tdelta
+    else:
+        irange = int(tdelta)
+        if irange <= 0:
+            return end, end
+        start = end-timedelta(days=irange)
+    return start, end

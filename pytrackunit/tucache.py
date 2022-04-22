@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from math import ceil
 from .webcache import WebCache
 from .tuiter import ReqIter, TuIter
+from .helper import start_end_from_tdelta
 
 URL_BASE = r'https://api.trackunit.com/public/'
 
@@ -29,18 +30,7 @@ class TuCache:
     def general_daydiff_get(self,furl,meta,previter=None):
         """returns data for timedependant requests for a given daydelta"""
         tdelta = meta["tdelta"]
-        if self.tdelta_end is None:
-            end = datetime.now()
-        else:
-            end = self.tdelta_end
-        end = end.replace(hour=0,minute=0,second=0,microsecond=0)
-        if isinstance(tdelta,timedelta):
-            start = end-tdelta
-        else:
-            irange = int(tdelta)
-            if irange <= 0:
-                return []
-            start = end-timedelta(days=irange)
+        start,end = start_end_from_tdelta(tdelta,self.tdelta_end)
         meta["start"] = start
         meta["end"] = end
         return self.general_time_range_get(furl,meta,previter)
