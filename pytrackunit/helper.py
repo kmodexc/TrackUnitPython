@@ -6,27 +6,34 @@ import matplotlib.pyplot as plt
 import matplotlib.dates
 from  dateutil.parser.isoparser import isoparse
 
-def plot_can_val(_data,valname):
+def plot_can_val(_data,valname,filename=None):
     """plot value from getCanData"""
     data = filter(lambda x:x['name'] == valname,_data)
-    plot_val(data,'value')
+    plot_val(data,'value',filename)
 
 def get_datetime(time_string):
     """transforms trackunit time string to datetime"""
     #return datetime.strptime(time_string.split('.')[0],"%Y-%m-%dT%H:%M:%S")
     return isoparse(time_string)
 
-def plot_val(_data,valname):
+def plot_val(_data,valname,filename=None):
     """plots a value from data (expected format from getHistory)"""
-    data = list(set(map(lambda x: (x['time'],x[valname]),_data)))
-    data = list(map(lambda x: (get_datetime(x[0]),float(x[1])),data))
+    data = (map(lambda x: (x['time'],x[valname]),_data))
+    data = (set(data))
+    data = (map(lambda x: (get_datetime(x[0]),float(x[1])),data))
+    data = list(data)
     data.sort(key=lambda x: x[0])
-    dates = matplotlib.dates.date2num(list(map(lambda x: x[0], data)))
+    dates = list(map(lambda x: x[0], data))
+    dates = matplotlib.dates.date2num(dates)
     fig, _ax = plt.subplots()#marker='', linestyle='-'
-    _ax.plot_date(dates, list(map(lambda x: x[1], data)),fmt=",-")
+    values = list(map(lambda x: x[1], data))
+    _ax.plot_date(dates, values ,fmt=",-")
     _ax.locator_params(axis="y", nbins=10)
     fig.autofmt_xdate()
-    plt.show()
+    if filename is not None:
+        plt.savefig(filename)
+    else:
+        plt.show()
 
 def get_next_section(data,finsec,fendsec=None,min_insec_len=None,min_endsec_len=0):
     """
@@ -46,7 +53,7 @@ def get_next_section(data,finsec,fendsec=None,min_insec_len=None,min_endsec_len=
         elif in_section and finsec(datapoint):
             out.append(datapoint)
         elif in_section and not finsec(datapoint):
-            if (min_insec_len is None or len(out) > min_insec_len) and \
+            if (min_insec_len is None or len(out) >= min_insec_len) and \
                 (fendsec is None or fendsec(datapoint)):
                 if off_sec_cnt >= min_endsec_len:
                     return out
