@@ -13,13 +13,13 @@ def test_gethistory():
 	tu = TrackUnit()
 	tu.cache.clean()
 	tu.cache.dir = "pytest-web-cache"
-	data = tu.get_history("3331359",tdelta=1)
+	data = tu.get_history("3331359",tdelta=100)
 	assert len(data) > 1000
 def test_getcandata():
 	tu = TrackUnit()
 	tu.cache.dir = "pytest-web-cache"
 	tu.cache.clean()
-	data = tu.get_candata("3331359",tdelta=1)
+	data = tu.get_candata("3331359",tdelta=100)
 	assert len(data) > 10000
 def test_getfaults():
 	tu = TrackUnit()
@@ -32,9 +32,9 @@ def test_getcandata_no_file_read():
 	tu.cache.cache.dont_read_files = True
 	tu.cache.dir = "pytest-web-cache"
 	tu.cache.clean()
-	data = tu.get_candata("3331359",tdelta=1)
+	data = tu.get_candata("3331359",tdelta=100)
 	assert len(data) > 10000
-	data = tu.get_candata("3331359",tdelta=1)
+	data = tu.get_candata("3331359",tdelta=100)
 	assert len(data) == 0
 	assert data == []
 	
