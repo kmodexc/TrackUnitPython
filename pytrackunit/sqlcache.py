@@ -160,7 +160,7 @@ class SqlInsertIter:
             for in_item in sqldata:
                 try:
                     self.cur.execute("INSERT INTO error VALUES (?,?,?,?,?,?,?)",in_item)
-                except sqlite3.IntegrityError as exc2:
+                except sqlite3.IntegrityError:
                     print("Item throwing Integrity error",in_item)
             self._db.rollback()
             raise sqlite3.IntegrityError from exc1
