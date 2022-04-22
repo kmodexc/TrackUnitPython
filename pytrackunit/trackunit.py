@@ -12,7 +12,7 @@ def get_multi_general(func,idlist,tdelta,f_process=None,progress_bar=True):
     f_process can be specified to process slices of data. f_process returns a list
     """
     if f_process is None:
-        f_process = lambda x: x
+        f_process = lambda x, meta: x
 
     async def get_data_async(globit,globlen):
         _cor = []
@@ -66,6 +66,8 @@ class TrackUnit:
         if _type is not None:
             data = list(filter(lambda x: " " in x['name'] and _type in x['name'],data))
         if sort_by_hours:
+            if not isinstance(data,list):
+                data = list(data) 
             data.sort(key=lambda x: (x['run1'] if 'run1' in x else 0),reverse=True)
         return data
 
