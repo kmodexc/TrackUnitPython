@@ -34,8 +34,8 @@ class TuCache:
         else:
             end = self.tdelta_end
         end = end.replace(hour=0,minute=0,second=0,microsecond=0)
-        if isinstance(tdelta,datetime):
-            start = end+tdelta
+        if isinstance(tdelta,timedelta):
+            start = end-tdelta
         else:
             irange = int(tdelta)
             if irange <= 0:
