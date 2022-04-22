@@ -149,10 +149,6 @@ class SqlInsertIter:
             print("Committed")
             self._db.commit()
             raise StopAsyncIteration from exc
-        except StopIteration as exc:
-            print("Committed")
-            self._db.commit()
-            raise StopAsyncIteration from exc
         except sqlite3.IntegrityError as exc1:
             print("Integrety error with",meta)
             print("Try to find double entry (insert side)")
