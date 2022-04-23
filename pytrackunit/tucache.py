@@ -1,6 +1,6 @@
 """tucache module"""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from math import ceil
 from .webcache import WebCache
 from .tuiter import ReqIter, TuIter

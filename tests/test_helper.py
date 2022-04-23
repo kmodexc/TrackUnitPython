@@ -298,15 +298,18 @@ def test_ma_insame():
 def test_start_end_from_tdelta_timedelta():
 	tdelta = timedelta(days=10)	
 	start, end = start_end_from_tdelta(tdelta,preset_end=datetime.fromtimestamp(START_UNIX_TS))
+	print(start, end)
 	assert end.timestamp() == START_UNIX_WITHOUT_TIME
 	assert start.timestamp() == 1649714400
 def test_start_end_from_tdelta_int_days():
 	tdelta = 10
 	start, end = start_end_from_tdelta(tdelta,preset_end=datetime.fromtimestamp(START_UNIX_TS))
+	print(start, end)
 	assert end.timestamp() == START_UNIX_WITHOUT_TIME
 	assert start.timestamp() == 1649714400
 def test_start_end_from_tdelta_zero_days():
 	tdelta = 0
 	start, end = start_end_from_tdelta(tdelta,preset_end=datetime.fromtimestamp(START_UNIX_TS))
+	print(start, end)
 	assert end.timestamp() == START_UNIX_WITHOUT_TIME
 	assert start.timestamp() == START_UNIX_WITHOUT_TIME

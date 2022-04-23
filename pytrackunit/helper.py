@@ -98,6 +98,12 @@ def moving_avg(data,valname,alpha=0.01,in_same = False):
     return data2
 
 def start_end_from_tdelta(tdelta, preset_end=None):
+    """
+    returns start and end (as datetime) from a given timedelta
+        (either type timedelta or and integer with days)
+    if preset_end is set to a datetime, the end will be set to this value
+    in any case it will return an end with hours, minutes, second, microseconds set to zero
+    """
     if preset_end is None:
         end = datetime.now()
     else:

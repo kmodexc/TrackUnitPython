@@ -3,7 +3,7 @@
 import sqlite3
 import os.path
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from .tucache import TuCache
 from .tuiter import SqlIter, TuIter
 from .helper import get_datetime, start_end_from_tdelta
@@ -119,14 +119,14 @@ def candata_item_to_sql_item(_x,meta):
     """
     _id = meta['id']
     _time = int(get_datetime(_x['time']).timestamp()*1000)
-    _variableId = _x['variableId']
+    _variableid = _x['variableId']
     _name = _x['name']
     _value = _x['value']
     if 'uoM' in _x:
-        _uoM = _x['uoM']
+        _uom = _x['uoM']
     else:
-        _uoM = 'none'
-    return (_id,_time,_variableId,_name,_value,_uoM)
+        _uom = None
+    return (_id,_time,_variableid,_name,_value,_uom)
 def sql_item_to_candata_item(obj):
     """
     the operation candata_item_to_sql_item reversed
@@ -153,11 +153,11 @@ def error_item_to_sql_item(_x,meta):
     if 'name' in _x:
         _name = _x['name']
     else:
-        _name = 'none'
+        _name = None
     if 'description' in _x:
         _desc = _x['description']
     else:
-        _desc = 'none'
+        _desc = None
     return (_id,_time,_spn,_fmi,_oc,_name,_desc)
 def sql_item_to_error_item(obj):
     """
@@ -172,64 +172,67 @@ def sql_item_to_error_item(obj):
     _x['name'] = obj[5]
     _x['description'] = obj[6]
     return _x
+
+# pylint: disable=invalid-name, too-many-locals
 def history_item_to_sql_item(_x,meta):
     """
     returns the history as a tuple and converts the time to unix timestamp (milliseconds)
     """
     _time = int(get_datetime(_x['time']).timestamp()*1000)
     _unit = meta['id']
-    _event = _x['event'] if 'event' in _x else 'none'
-    _keyId = _x['keyId'] if 'keyId' in _x else 'none'
-    _latitude = _x['latitude'] if 'latitude' in _x else 'none'
-    _longitude = _x['longitude'] if 'longitude' in _x else 'none'
-    _streetAddress = _x['streetAddress'] if 'streetAddress' in _x else 'none'
-    _postalCode = _x['postalCode'] if 'postalCode' in _x else 'none'
-    _city = _x['city'] if 'city' in _x else 'none'
-    _country = _x['country'] if 'country' in _x else 'none'
-    _heading = _x['heading'] if 'heading' in _x else 'none'
-    _speed = _x['speed'] if 'speed' in _x else 'none'
-    _km = _x['km'] if 'km' in _x else 'none'
-    _run1 = _x['run1'] if 'run1' in _x else 'none'
-    _run2 = _x['run2'] if 'run2' in _x else 'none'
-    _run3 = _x['run3'] if 'run3' in _x else 'none'
-    _run4 = _x['run4'] if 'run4' in _x else 'none'
-    _runOdo = _x['runOdo'] if 'runOdo' in _x else 'none'
-    _temperature1 = _x['temperature1'] if 'temperature1' in _x else 'none'
-    _temperature2 = _x['temperature2'] if 'temperature2' in _x else 'none'
-    _input1 = _x['input1'] if 'input1' in _x else 'none'
-    _input2 = _x['input2'] if 'input2' in _x else 'none'
-    _input3 = _x['input3'] if 'input3' in _x else 'none'
-    _input4 = _x['input4'] if 'input4' in _x else 'none'
-    _input5 = _x['input5'] if 'input5' in _x else 'none'
-    _input6 = _x['input6'] if 'input6' in _x else 'none'
-    _input7 = _x['input7'] if 'input7' in _x else 'none'
-    _input8 = _x['input8'] if 'input8' in _x else 'none'
-    _input9 = _x['input9'] if 'input9' in _x else 'none'
-    _input10 = _x['input10']  if 'input10' in _x else 'none'
-    _output1 = _x['output1'] if 'output1' in _x else 'none'
-    _output2 = _x['output2'] if 'output2' in _x else 'none'
-    _output3 = _x['output3'] if 'output3' in _x else 'none'
-    _output4 = _x['output4'] if 'output4' in _x else 'none'
-    _output5 = _x['output5'] if 'output5' in _x else 'none'
-    _analogInput1 = _x['analogInput1'] if 'analogInput1' in _x else 'none'
-    _analogInput2 = _x['analogInput2'] if 'analogInput2' in _x else 'none'
-    _analogInput4 = _x['analogInput4'] if 'analogInput4' in _x else 'none'
-    _Input1ChangeCounter = _x['Input1ChangeCounter'] if 'Input1ChangeCounter' in _x else 'none'
-    _Input2ChangeCounter = _x['Input2ChangeCounter'] if 'Input2ChangeCounter' in _x else 'none'
-    _Input3ChangeCounter = _x['Input3ChangeCounter'] if 'Input3ChangeCounter' in _x else 'none'
-    _Input4ChangeCounter = _x['Input4ChangeCounter'] if 'Input4ChangeCounter' in _x else 'none'
-    _batteryLevel = _x['batteryLevel'] if 'batteryLevel' in _x else 'none'
-    _externalPower = _x['externalPower'] if 'externalPower' in _x else 'none'
+    _event = _x['event'] if 'event' in _x else None
+    _keyId = _x['keyId'] if 'keyId' in _x else None
+    _latitude = _x['latitude'] if 'latitude' in _x else None
+    _longitude = _x['longitude'] if 'longitude' in _x else None
+    _streetAddress = _x['streetAddress'] if 'streetAddress' in _x else None
+    _postalCode = _x['postalCode'] if 'postalCode' in _x else None
+    _city = _x['city'] if 'city' in _x else None
+    _country = _x['country'] if 'country' in _x else None
+    _heading = _x['heading'] if 'heading' in _x else None
+    _speed = _x['speed'] if 'speed' in _x else None
+    _km = _x['km'] if 'km' in _x else None
+    _run1 = _x['run1'] if 'run1' in _x else None
+    _run2 = _x['run2'] if 'run2' in _x else None
+    _run3 = _x['run3'] if 'run3' in _x else None
+    _run4 = _x['run4'] if 'run4' in _x else None
+    _runOdo = _x['runOdo'] if 'runOdo' in _x else None
+    _temperature1 = _x['temperature1'] if 'temperature1' in _x else None
+    _temperature2 = _x['temperature2'] if 'temperature2' in _x else None
+    _input1 = _x['input1'] if 'input1' in _x else None
+    _input2 = _x['input2'] if 'input2' in _x else None
+    _input3 = _x['input3'] if 'input3' in _x else None
+    _input4 = _x['input4'] if 'input4' in _x else None
+    _input5 = _x['input5'] if 'input5' in _x else None
+    _input6 = _x['input6'] if 'input6' in _x else None
+    _input7 = _x['input7'] if 'input7' in _x else None
+    _input8 = _x['input8'] if 'input8' in _x else None
+    _input9 = _x['input9'] if 'input9' in _x else None
+    _input10 = _x['input10']  if 'input10' in _x else None
+    _output1 = _x['output1'] if 'output1' in _x else None
+    _output2 = _x['output2'] if 'output2' in _x else None
+    _output3 = _x['output3'] if 'output3' in _x else None
+    _output4 = _x['output4'] if 'output4' in _x else None
+    _output5 = _x['output5'] if 'output5' in _x else None
+    _analogInput1 = _x['analogInput1'] if 'analogInput1' in _x else None
+    _analogInput2 = _x['analogInput2'] if 'analogInput2' in _x else None
+    _analogInput4 = _x['analogInput4'] if 'analogInput4' in _x else None
+    _Input1ChangeCounter = _x['Input1ChangeCounter'] if 'Input1ChangeCounter' in _x else None
+    _Input2ChangeCounter = _x['Input2ChangeCounter'] if 'Input2ChangeCounter' in _x else None
+    _Input3ChangeCounter = _x['Input3ChangeCounter'] if 'Input3ChangeCounter' in _x else None
+    _Input4ChangeCounter = _x['Input4ChangeCounter'] if 'Input4ChangeCounter' in _x else None
+    _batteryLevel = _x['batteryLevel'] if 'batteryLevel' in _x else None
+    _externalPower = _x['externalPower'] if 'externalPower' in _x else None
 
-    return (_unit, _time, _event, _keyId, _latitude, _longitude, 
-        _streetAddress, _postalCode, _city, _country, _heading, 
-        _speed, _km, _run1, _run2, _run3, _run4, _runOdo, _temperature1, 
-        _temperature2, _input1, _input2, _input3, _input4, _input5, 
-        _input6, _input7, _input8, _input9, _input10, _output1, _output2, 
-        _output3, _output4, _output5, _analogInput1, _analogInput2, 
-        _analogInput4, _Input1ChangeCounter, _Input2ChangeCounter, 
-        _Input3ChangeCounter, _Input4ChangeCounter, 
+    return (_unit, _time, _event, _keyId, _latitude, _longitude,
+        _streetAddress, _postalCode, _city, _country, _heading,
+        _speed, _km, _run1, _run2, _run3, _run4, _runOdo, _temperature1,
+        _temperature2, _input1, _input2, _input3, _input4, _input5,
+        _input6, _input7, _input8, _input9, _input10, _output1, _output2,
+        _output3, _output4, _output5, _analogInput1, _analogInput2,
+        _analogInput4, _Input1ChangeCounter, _Input2ChangeCounter,
+        _Input3ChangeCounter, _Input4ChangeCounter,
         _batteryLevel, _externalPower)
+# pylinte: enable=invalid-name, too-many-locals
 def sql_item_to_history_item(obj):
     """
     the operation history_item_to_sql_item reversed
@@ -289,19 +292,18 @@ class SqlInsertIter:
         self.iter_started = False
         self.meta = meta
         self._db = _db
-        self.table = table
         if self._db is not None:
             self.cur = self._db.cursor()
-        if self.table == "error":
+        if table == "error":
             self.insert_sql = "INSERT INTO error VALUES (?,?,?,?,?,?,?)"
             self.fconv = error_item_to_sql_item
-        elif self.table == "history":
+        elif table == "history":
             self.insert_sql = """
             INSERT INTO history VALUES 
             (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """
             self.fconv = history_item_to_sql_item
-        elif self.table == "candata":
+        elif table == "candata":
             self.insert_sql = """
             INSERT INTO candata VALUES 
             (?,?,?,?,?,?)
@@ -365,6 +367,7 @@ class SqlCache:
             self._db.close()
             os.remove(self.web_db_path)
             self._db = None
+    # pylint: disable=too-many-arguments
     def get_general_upstream(self, table, veh_id, start_ts, end_ts, previter=None):
         """gets errors from upstream cache"""
         cur = self._db.cursor()
@@ -475,6 +478,7 @@ class SqlCache:
         previter, cnt2 = self.get_general_unixts(table,veh_id,me_start,me_end,previter)
         previter, cnt3 = self.get_general_unixts(table,veh_id,me_end+1,end_ts,previter)
         return previter,(cnt1+cnt2+cnt3)
+    # pylint: enable=too-many-arguments
     def get_faults_timedelta(self,veh_id,start,end,previter=None):
         """returns error in between the given datetime objects"""
         start_ts = int(start.timestamp()*1000)
