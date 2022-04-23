@@ -8,8 +8,9 @@ from copy import deepcopy
 from pytrackunit.helper import *
 
 
-START_UNIX_TS = 1650633853
-START_UNIX_WITHOUT_TIME = 1650578400
+END_UNIX_TS = datetime(year=2022,month=2,day=20,hour=10,second=10,microsecond=10000).timestamp()
+END_UNIX_WITHOUT_TIME = datetime(year=2022,month=2,day=20).timestamp()
+START_UNIX_TS = datetime(year=2022,month=2,day=10).timestamp()
 
 # ------ plot_can_val -------
 
@@ -23,7 +24,7 @@ def test_plot_can_val():
 	data = []
 	for i in range(3000):		
 		to = deepcopy(testobj)
-		time = datetime.fromtimestamp(START_UNIX_TS+i*100)
+		time = datetime.fromtimestamp(END_UNIX_TS+i*100)
 		to['time'] = time.isoformat()
 		to['value'] = math.sin(i/100)
 		data.append(to)
@@ -70,7 +71,7 @@ def test_plot_val():
 	data = []
 	for i in range(3000):
 		to = deepcopy(testobj)
-		time = datetime.fromtimestamp(START_UNIX_TS+i*100)
+		time = datetime.fromtimestamp(END_UNIX_TS+i*100)
 		to['time'] = time.isoformat()
 		to[propname] = math.sin(i/100)
 		data.append(to)
@@ -104,7 +105,7 @@ def get_dataset(id=0):
 		dobj['value'] = 2.0
 		indata = []
 		for i in range(10):
-			dobj['time'] = datetime.fromtimestamp(START_UNIX_TS+i).isoformat()
+			dobj['time'] = datetime.fromtimestamp(END_UNIX_TS+i).isoformat()
 			if (i // 3) % 2 == 0:
 				dobj['value'] = 1
 			else:
@@ -116,7 +117,7 @@ def get_dataset(id=0):
 		dobj['value'] = 2.0
 		indata = []
 		for i in range(100):
-			dobj['time'] = datetime.fromtimestamp(START_UNIX_TS+i).isoformat()
+			dobj['time'] = datetime.fromtimestamp(END_UNIX_TS+i).isoformat()
 			dobj['value'] = math.sin(i/10)
 			indata.append(deepcopy(dobj))
 	elif id == 2:
@@ -125,7 +126,7 @@ def get_dataset(id=0):
 		dobj['value'] = 2.0
 		indata = []
 		for i in range(10):
-			dobj['time'] = datetime.fromtimestamp(START_UNIX_TS+i).isoformat()
+			dobj['time'] = datetime.fromtimestamp(END_UNIX_TS+i).isoformat()
 			dobj['value'] = i % 4
 			indata.append(deepcopy(dobj))
 	return indata
@@ -297,19 +298,19 @@ def test_ma_insame():
 
 def test_start_end_from_tdelta_timedelta():
 	tdelta = timedelta(days=10)	
-	start, end = start_end_from_tdelta(tdelta,preset_end=datetime.fromtimestamp(START_UNIX_TS))
+	start, end = start_end_from_tdelta(tdelta,preset_end=datetime.fromtimestamp(END_UNIX_TS))
 	print(start, end)
-	assert end.timestamp() == START_UNIX_WITHOUT_TIME
-	assert start.timestamp() == 1649714400
+	assert end.timestamp() == END_UNIX_WITHOUT_TIME
+	assert start.timestamp() == START_UNIX_TS
 def test_start_end_from_tdelta_int_days():
 	tdelta = 10
-	start, end = start_end_from_tdelta(tdelta,preset_end=datetime.fromtimestamp(START_UNIX_TS))
+	start, end = start_end_from_tdelta(tdelta,preset_end=datetime.fromtimestamp(END_UNIX_TS))
 	print(start, end)
-	assert end.timestamp() == START_UNIX_WITHOUT_TIME
-	assert start.timestamp() == 1649714400
+	assert end.timestamp() == END_UNIX_WITHOUT_TIME
+	assert start.timestamp() == START_UNIX_TS
 def test_start_end_from_tdelta_zero_days():
 	tdelta = 0
-	start, end = start_end_from_tdelta(tdelta,preset_end=datetime.fromtimestamp(START_UNIX_TS))
+	start, end = start_end_from_tdelta(tdelta,preset_end=datetime.fromtimestamp(END_UNIX_TS))
 	print(start, end)
-	assert end.timestamp() == START_UNIX_WITHOUT_TIME
-	assert start.timestamp() == START_UNIX_WITHOUT_TIME
+	assert end.timestamp() == END_UNIX_WITHOUT_TIME
+	assert start.timestamp() == END_UNIX_WITHOUT_TIME
