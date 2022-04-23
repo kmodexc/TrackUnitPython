@@ -8,6 +8,7 @@ from .tucache import TuCache
 from .tuiter import SqlIter, TuIter
 from .helper import get_datetime, start_end_from_tdelta
 
+
 CREATE_HISTORY_META = '''
 create table historymeta(
     unit text, 
@@ -287,6 +288,7 @@ def sql_item_to_history_item(obj):
 class SqlInsertIter:
     """iterator for tucache data"""
     def __init__(self, table, sqliter, meta=None, _db=None):
+        assert _db is not None
         print("SqlInsertIter __init__ has sqliter:",sqliter)
         self.sqliter = sqliter
         self.iter_started = False
@@ -344,14 +346,15 @@ class SqlInsertIter:
             raise sqlite3.IntegrityError from exc1
 class SqlCache:
     """Sql cache can cache trackunit data in Sqlite DB"""
-    def __init__(self,auth=None,_dir=None,db_file="webdb.db",upstream_cache=None):
+    def __init__(self,auth=None,_dir=None,db_file="webdb.db",upstream_cache=None,verbose=False):
         create_tables = not os.path.isfile(db_file)
         self.web_db_path = db_file
         self._db = sqlite3.connect(self.web_db_path)
+        assert self._db is not None
         self.cache = upstream_cache
         self.tdelta_end = None
         if self.cache is None:
-            self.cache = TuCache(auth,_dir,verbose=True)
+            self.cache = TuCache(auth,_dir,verbose=verbose)
             self.cache.cache.dont_cache_data = True
         if create_tables:
             cur = self._db.cursor()
@@ -368,6 +371,20 @@ class SqlCache:
             self._db.close()
             os.remove(self.web_db_path)
             self._db = None
+    @property
+    def verbose(self):
+        """returns verbose mode value. in verbose mode, diagnostic output is printed to console."""
+        return self.cache.verbose
+    @verbose.setter
+    def verbose(self, value3):
+        """sets the verbose mode. in verbose mode, diagnostic output is printed to console."""
+        self.cache.verbose = value3
+    async def get_unitlist(self):
+        """returns a list of vehicles"""
+        self.cache.cache.dont_cache_data = False
+        fdata = self.cache.get_url('Unit')
+        self.cache.cache.dont_cache_data = True
+        return await fdata
     # pylint: disable=too-many-arguments
     def get_general_upstream(self, table, veh_id, start_ts, end_ts, previter=None):
         """gets errors from upstream cache"""
