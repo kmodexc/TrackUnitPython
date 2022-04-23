@@ -2,7 +2,7 @@
 
 ![test](https://github.com/einsteinmaster/TrackUnitPython/actions/workflows/test.yml/badge.svg)
 ![lint](https://github.com/einsteinmaster/TrackUnitPython/actions/workflows/pylint.yml/badge.svg)
-
+[![Coverage Status](https://coveralls.io/repos/github/kmodexc/TrackUnitPython/badge.svg?branch=main)](https://coveralls.io/github/kmodexc/TrackUnitPython?branch=main)
 
 Python API for Trackunit
 
