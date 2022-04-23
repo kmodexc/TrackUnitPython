@@ -1,5 +1,6 @@
 """webcache module"""
 
+from pickle import FALSE
 import traceback
 import json
 import os
@@ -47,6 +48,7 @@ class WebCache:
         self.dont_read_files = False
         self.dont_return_data = False
         self.return_only_cache_files = False
+        self.dont_cache_data = False
         Path(self.dir).mkdir(parents=True, exist_ok=True)
     def clean(self):
         """clean method"""
@@ -65,6 +67,9 @@ class WebCache:
                 return _j , _t
     async def get(self,url):
         """get method"""
+        if self.dont_cache_data:
+            data, _ = await self.get_from_web(url)
+            return data
         fname = md5(url.encode('utf-8')).hexdigest()+".json"
         if self.return_only_cache_files:
             return fname
