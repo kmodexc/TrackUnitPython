@@ -22,6 +22,8 @@ class CacheForTests:
     async def get_url(self, url):
         assert url == "Unit"
         return self.generate_unit_list()
+    async def get_unitlist(self):
+        return await self.get_url("Unit")
     async def generate_history_data(self):
         for i in range(10):
             testobj = {}
