@@ -1,6 +1,5 @@
 """webcache module"""
 
-from pickle import FALSE
 import traceback
 import json
 import os
@@ -44,7 +43,6 @@ class WebCache:
             self.dir = "web-cache"
         else:
             self.dir = _dir
-        self.min_write_len = 0
         self.dont_read_files = False
         self.dont_return_data = False
         self.return_only_cache_files = False
