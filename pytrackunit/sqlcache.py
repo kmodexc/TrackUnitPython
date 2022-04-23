@@ -352,6 +352,7 @@ class SqlCache:
         self.tdelta_end = None
         if self.cache is None:
             self.cache = TuCache(auth,_dir,verbose=True)
+            self.cache.cache.dont_cache_data = True
         if create_tables:
             cur = self._db.cursor()
             cur.execute(CREATE_HISTORY_TABLE)
