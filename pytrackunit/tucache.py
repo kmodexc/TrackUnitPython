@@ -17,6 +17,16 @@ class TuCache:
     def clean(self):
         """deletes all cached data"""
         self.cache.clean()
+    # pylint: disable=duplicate-code
+    @property
+    def verbose(self):
+        """returns verbose mode value. in verbose mode, diagnostic output is printed to console."""
+        return self.cache.verbose
+    @verbose.setter
+    def verbose(self, value2):
+        """sets the verbose mode. in verbose mode, diagnostic output is printed to console."""
+        self.cache.verbose = value2
+    # pylint: enable=duplicate-code
     async def get_url(self,url):
         """takes the data from cache if possible. otherwise data is loaded from web"""
         data = await self.cache.get(URL_BASE+url)
@@ -27,6 +37,9 @@ class TuCache:
         if self.cache.dont_read_files and len(data) == 0:
             return []
         return data.get('list')
+    async def get_unitlist(self):
+        """returns a list of vehicles"""
+        return await self.get_url('Unit')
     def general_daydiff_get(self,furl,meta,previter=None):
         """returns data for timedependant requests for a given daydelta"""
         tdelta = meta["tdelta"]
@@ -66,7 +79,7 @@ class TuCache:
         meta["id"] = veh_id
         meta["start"] = start
         meta["end"] = end
-        return self.general_daydiff_get(lambda t1,t2: \
+        return self.general_time_range_get(lambda t1,t2: \
             'Report/UnitHistory?unitId='+veh_id+'&from='+t1+'.0000001Z&to='+t2+'.0000000Z',\
                 meta,previter)
     def get_candata(self,veh_id,tdelta=None,previter=None):
@@ -83,7 +96,7 @@ class TuCache:
         meta["id"] = veh_id
         meta["start"] = start
         meta["end"] = end
-        return self.general_daydiff_get(lambda t1,t2: \
+        return self.general_time_range_get(lambda t1,t2: \
             'Report/UnitExtendedInfo?Id='+veh_id+'&from='+t1+'.0000001Z&to='+t2+'.0000000Z',\
                 meta,previter)
     def get_faults(self,veh_id,tdelta=None,previter=None):
