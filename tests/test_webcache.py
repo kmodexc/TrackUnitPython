@@ -93,12 +93,13 @@ def test_Get_verbose(capsys):
 	cache.clean()
 	data1 = asyncio.run(cache.get(DUMMY_URL))
 	captured = capsys.readouterr()
-	assert captured.out.split(' ')[0] == DUMMY_URL
-	assert captured.out.split(' ')[2] == "W\n"
+	print(captured)
+	assert captured.out.split('\n')[1].split(' ')[0] == DUMMY_URL
+	assert captured.out.split('\n')[1].split(' ')[2] == "W"
 	data2 = asyncio.run(cache.get(DUMMY_URL))
 	captured = capsys.readouterr()
-	assert captured.out.split(' ')[0] == DUMMY_URL
-	assert captured.out.split(' ')[2] == "C\n"
+	assert captured.out.split('\n')[1].split(' ')[0] == DUMMY_URL
+	assert captured.out.split('\n')[1].split(' ')[2] == "C"
 def test_return_hashes():
 	cache = WebCache(_dir="pytest-web-cache",verbose=True,return_only_cache_files = True)
 	cache.clean()
