@@ -10,23 +10,13 @@ URL_BASE = r'https://api.trackunit.com/public/'
 
 class TuCache:
     """tucache class"""
-    def __init__(self,auth=None,_dir=None,verbose=False):
-        self.cache = WebCache(auth=auth,_dir=_dir,verbose=verbose)
+    def __init__(self,**kwargs):
+        self.cache = WebCache(**kwargs)
         self.req_period = 30
         self.tdelta_end = None
     def clean(self):
         """deletes all cached data"""
         self.cache.clean()
-    # pylint: disable=duplicate-code
-    @property
-    def verbose(self):
-        """returns verbose mode value. in verbose mode, diagnostic output is printed to console."""
-        return self.cache.verbose
-    @verbose.setter
-    def verbose(self, value2):
-        """sets the verbose mode. in verbose mode, diagnostic output is printed to console."""
-        self.cache.verbose = value2
-    # pylint: enable=duplicate-code
     async def get_url(self,url):
         """takes the data from cache if possible. otherwise data is loaded from web"""
         data = await self.cache.get(URL_BASE+url)

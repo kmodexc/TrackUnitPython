@@ -36,17 +36,15 @@ async def get_from_file(fname,dont_read=False):
 
 class WebCache:
     """WebCache class"""
-    def __init__(self,auth=None,_dir=None,verbose=False):
-        self.auth = BasicAuth(auth[0],auth[1]) if auth is not None else None
-        self.verbose = verbose
-        if _dir is None:
-            self.dir = "web-cache"
-        else:
-            self.dir = _dir
-        self.dont_read_files = False
-        self.dont_return_data = False
-        self.return_only_cache_files = False
-        self.dont_cache_data = False
+    def __init__(self,**kwargs):
+        auth_tuple = kwargs.get("auth",None)
+        self.auth = BasicAuth(auth_tuple[0],auth_tuple[1]) if auth_tuple is not None else None
+        self.verbose = kwargs.get("verbose",False)
+        self.dir = kwargs.get("webcache_dir","web-cache")
+        self.dont_read_files = kwargs.get("dont_read_files",False)
+        self.dont_return_data = kwargs.get("dont_return_data",False)
+        self.return_only_cache_files = kwargs.get("return_only_cache_files",False)
+        self.dont_cache_data = kwargs.get("dont_cache_data",False)
         Path(self.dir).mkdir(parents=True, exist_ok=True)
     def clean(self):
         """clean method"""

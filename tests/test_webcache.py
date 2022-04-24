@@ -74,8 +74,7 @@ def test_Get_WithFile():
 	assert data["abilities"][0]["ability"]["name"] == "limber"
 	cache.clean()
 def test_Get_no_file_read():
-	cache = WebCache(_dir="pytest-web-cache")
-	cache.dont_read_files = True
+	cache = WebCache(_dir="pytest-web-cache",dont_read_files = True)
 	cache.clean()
 	data = asyncio.run(cache.get(DUMMY_URL))
 	assert data["abilities"][0]["ability"]["name"] == "limber"
@@ -101,8 +100,7 @@ def test_Get_verbose(capsys):
 	assert captured.out.split(' ')[0] == DUMMY_URL
 	assert captured.out.split(' ')[2] == "C\n"
 def test_return_hashes():
-	cache = WebCache(_dir="pytest-web-cache",verbose=True)
+	cache = WebCache(_dir="pytest-web-cache",verbose=True,return_only_cache_files = True)
 	cache.clean()
-	cache.return_only_cache_files = True
 	data = asyncio.run(cache.get(DUMMY_URL))
 	assert data == DUMMY_URL_HASH+".json"
