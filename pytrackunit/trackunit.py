@@ -5,7 +5,7 @@ import os.path
 import asyncio
 import tqdm
 from .tucache import TuCache
-#from .sqlcache import SqlCache
+from .sqlcache import SqlCache
 
 def get_multi_general(func,idlist,tdelta,f_process=None,progress_bar=True):
     """
@@ -57,8 +57,10 @@ class TrackUnit:
             if len(api_key) != 32:
                 raise Exception("Invalid API-key length")
             kwargs['auth'] = ('API',api_key)
-        #self.cache = SqlCache(**kwargs)
-        self.cache = TuCache(**kwargs)
+        if kwargs.get('tu_use_sqlcache',False):
+            self.cache = SqlCache(**kwargs)
+        else:
+            self.cache = TuCache(**kwargs)
     async def _a_get_unitlist(self,_type=None,sort_by_hours=True):
         """unitList method"""
         data = await self.cache.get_unitlist()
