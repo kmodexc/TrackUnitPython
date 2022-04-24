@@ -5,6 +5,7 @@ import os.path
 import asyncio
 import tqdm
 from .tucache import TuCache
+#from .sqlcache import SqlCache
 
 def get_multi_general(func,idlist,tdelta,f_process=None,progress_bar=True):
     """
@@ -36,33 +37,31 @@ def get_multi_general(func,idlist,tdelta,f_process=None,progress_bar=True):
 
 class TrackUnit:
     """TrackUnit class"""
-    def __init__(self,config_filename=None,api_key=None,verbose=False):
-        if config_filename is None:
-            config_filename = "config.json"
+    def __init__(self,**kwargs):
+        config_filename = kwargs.get("config_path","config.json")
         config = {}
         if os.path.isfile(config_filename):
             with open(config_filename,encoding="utf8") as file:
                 config = json.load(file)
-        else:
-            config["apikey-location"] = "api.key"
-            config["webcache-location"] = "web-cache"
-        if api_key is None:
-            with open(config["apikey-location"],encoding="utf8") as file_apikey:
-                api_key = file_apikey.readline()
-        self.cache = TuCache(('API',api_key),_dir=config["webcache-location"],verbose=verbose)
-
-    @property
-    def verbose(self):
-        """returns verbose mode value. in verbose mode, diagnostic output is printed to console."""
-        return self.cache.cache.verbose
-    @verbose.setter
-    def verbose(self, value):
-        """sets the verbose mode. in verbose mode, diagnostic output is printed to console."""
-        self.cache.cache.verbose = value
-
+        for k in config:
+            if k not in kwargs:
+                kwargs[k] = config[k]
+        if 'auth' not in kwargs:
+            if kwargs.get('api_key',None) is None:
+                if 'apikey_path' not in kwargs:
+                    kwargs['apikey_path'] = 'api.key'
+                with open(kwargs["apikey_path"],encoding="utf8") as file_apikey:
+                    api_key = file_apikey.readline()
+            else:
+                api_key = kwargs['api_key']
+            if len(api_key) != 32:
+                raise Exception("Invalid API-key length")
+            kwargs['auth'] = ('API',api_key)
+        #self.cache = SqlCache(**kwargs)
+        self.cache = TuCache(**kwargs)
     async def _a_get_unitlist(self,_type=None,sort_by_hours=True):
         """unitList method"""
-        data = await self.cache.get_url('Unit')
+        data = await self.cache.get_unitlist()
         if _type is not None:
             data = list(filter(lambda x: " " in x['name'] and _type in x['name'],data))
         if sort_by_hours:
