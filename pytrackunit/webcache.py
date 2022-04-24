@@ -37,6 +37,8 @@ async def get_from_file(fname,dont_read=False):
 class WebCache:
     """WebCache class"""
     def __init__(self,**kwargs):
+        if kwargs.get('verbose',False):
+            print("WebCaches args:",kwargs)
         auth_tuple = kwargs.get("auth",None)
         self.auth = BasicAuth(auth_tuple[0],auth_tuple[1]) if auth_tuple is not None else None
         self.verbose = kwargs.get("verbose",False)
