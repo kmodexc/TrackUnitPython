@@ -13,7 +13,7 @@ class TuCache:
     def __init__(self,**kwargs):
         self.cache = WebCache(**kwargs)
         self.req_period = 30
-        self.tdelta_end = None
+        self.tdelta_end = kwargs.get("tdelta_end",None)
     def clean(self):
         """deletes all cached data"""
         self.cache.clean()
