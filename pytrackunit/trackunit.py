@@ -6,6 +6,7 @@ import asyncio
 import tqdm
 from .tucache import TuCache
 from .sqlcache import SqlCache
+from .helper import SecureString
 
 def get_multi_general(func,idlist,tdelta,f_process=None,progress_bar=True):
     """
@@ -51,12 +52,12 @@ class TrackUnit:
                 if 'apikey_path' not in kwargs:
                     kwargs['apikey_path'] = 'api.key'
                 with open(kwargs["apikey_path"],encoding="utf8") as file_apikey:
-                    api_key = file_apikey.readline()
+                    api_key = SecureString(file_apikey.readline())
             else:
                 api_key = kwargs['api_key']
-            if len(api_key) != 32:
+            if len(api_key.gets()) != 32:
                 raise Exception("Invalid API-key length")
-            kwargs['auth'] = ('API',api_key)
+            kwargs['auth'] = (SecureString('API'),api_key)
         if kwargs.get('tu_use_sqlcache',False):
             self.cache = SqlCache(**kwargs)
         else:

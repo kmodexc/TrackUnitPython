@@ -1,12 +1,13 @@
 """Module for caching data in sql db"""
 
 from copy import deepcopy
-import sqlite3
 import os.path
 import os
 from datetime import datetime
+import sqlite3
+import aiosqlite
 from .tucache import TuCache
-from .tuiter import SqlIter, TuIter
+from .tuiter import TuIter
 from .helper import get_datetime, start_end_from_tdelta
 
 
@@ -115,6 +116,19 @@ CREATE TABLE candata(
 )
 '''
 
+def create_tables(db_path):
+    """Creates the necessary tables in an sqlite database which is located at db_path"""
+    _db = sqlite3.connect(db_path)
+    cur = _db.cursor()
+    cur.execute(CREATE_HISTORY_TABLE)
+    cur.execute(CREATE_HISTORY_META)
+    cur.execute(CREATE_ERROR_META_TABLE)
+    cur.execute(CREATE_ERROR_DATA_TABLE)
+    cur.execute(CREATE_CANDATA_META_TABLE)
+    cur.execute(CREATE_CANDATA_DATA_TABLE)
+    _db.commit()
+    _db.close()
+
 def candata_item_to_sql_item(_x,meta):
     """
     returns the candata as a tuple and converts the time to unix timestamp (milliseconds)
@@ -129,6 +143,7 @@ def candata_item_to_sql_item(_x,meta):
     else:
         _uom = None
     return (_id,_time,_variableid,_name,_value,_uom)
+
 def sql_item_to_candata_item(obj):
     """
     the operation candata_item_to_sql_item reversed
@@ -141,6 +156,7 @@ def sql_item_to_candata_item(obj):
     _x['value'] = obj[4]
     _x['uoM'] = obj[5]
     return _x
+
 def error_item_to_sql_item(_x,meta):
     """
     returns the error as a tuple and converts the time to unix timestamp (milliseconds)
@@ -161,6 +177,7 @@ def error_item_to_sql_item(_x,meta):
     else:
         _desc = None
     return (_id,_time,_spn,_fmi,_oc,_name,_desc)
+
 def sql_item_to_error_item(obj):
     """
     the operation error_item_to_sql_item reversed
@@ -235,6 +252,7 @@ def history_item_to_sql_item(_x,meta):
         _Input3ChangeCounter, _Input4ChangeCounter,
         _batteryLevel, _externalPower)
 # pylinte: enable=invalid-name, too-many-locals
+
 def sql_item_to_history_item(obj):
     """
     the operation history_item_to_sql_item reversed
@@ -286,103 +304,127 @@ def sql_item_to_history_item(obj):
     _x['externalPower'] = obj[43]
     return _x
 
-class SqlInsertIter:
-    """iterator for tucache data"""
-    def __init__(self, table, sqliter, meta=None, _db=None):
-        assert _db is not None
-        print("SqlInsertIter __init__ has sqliter:",sqliter)
-        self.sqliter = sqliter
-        self.iter_started = False
-        self.meta = meta
-        self._db = _db
-        if self._db is not None:
-            self.cur = self._db.cursor()
+async def SqlInsertIter(dbpath, table, sqliter, meta, verbose=False):
+    """Generator which inserts data from an upstream iterator into the database"""
+    assert dbpath is not None
+    assert dbpath != ""
+
+    async with aiosqlite.connect(dbpath) as _db:
+
+        if verbose:
+            print("SqlInsertIter __init__ has sqliter:",sqliter)
         if table == "error":
-            self.insert_sql = "INSERT INTO error VALUES (?,?,?,?,?,?,?)"
-            self.fconv = error_item_to_sql_item
+            insert_sql = "INSERT INTO error VALUES (?,?,?,?,?,?,?)"
+            fconv = error_item_to_sql_item
         elif table == "history":
-            self.insert_sql = """
+            insert_sql = """
             INSERT INTO history VALUES 
             (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """
-            self.fconv = history_item_to_sql_item
+            fconv = history_item_to_sql_item
         elif table == "candata":
-            self.insert_sql = """
+            insert_sql = """
             INSERT INTO candata VALUES 
             (?,?,?,?,?,?)
             """
-            self.fconv = candata_item_to_sql_item
+            fconv = candata_item_to_sql_item
         else:
             raise Exception("Not yet implemented")
 
-    def __aiter__(self):
-        if self.iter_started:
-            raise Exception("cant start tuiter more than once")
-        self.iter_started = True
-        return self
+        await _db.execute(f"INSERT INTO {table}meta VALUES (?,?,?)",\
+            (meta['id'],meta['start_ts'],meta['end_ts']))
 
-    async def __anext__(self):
-        try:
-            data, meta = await self.sqliter.__anext__()
-            if self._db is not None:
-                #print(data)
-                data = list(data)
-                sqldata = (map(lambda x: self.fconv(x,meta),data))
-                self.cur.executemany(self.insert_sql,sqldata)
-            return data, meta
-        except StopAsyncIteration as exc:
+        async for data,meta in sqliter:
+            data = list(data)
+            sqldata = map(lambda x: fconv(x[0],x[1]),zip(data,[meta]))
+
+            try:
+                await _db.executemany(insert_sql,sqldata)
+            except sqlite3.IntegrityError as exc1:
+                if verbose:
+                    print("Integrety error with",meta)
+                    print("Try to find double entry (insert side)")
+                    for in_item in sqldata:
+                        try:
+                            await _db.execute(insert_sql,in_item)
+                        except sqlite3.IntegrityError:
+                            print("Item throwing Integrity error",in_item)
+                await _db.rollback()
+                raise sqlite3.IntegrityError from exc1
+
+            yield data, meta
+
+        if verbose:
+            await _db.commit()
             print("Committed")
-            self._db.commit()
-            raise StopAsyncIteration from exc
-        except sqlite3.IntegrityError as exc1:
-            print("Integrety error with",meta)
-            print("Try to find double entry (insert side)")
-            sqldata = (map(lambda x: self.fconv(x,meta),data))
-            for in_item in sqldata:
-                try:
-                    self.cur.execute(self.insert_sql,in_item)
-                except sqlite3.IntegrityError:
-                    print("Item throwing Integrity error",in_item)
-            self._db.rollback()
-            raise sqlite3.IntegrityError from exc1
+
+
+
+async def SqlReturnIter(db_path, table, meta):
+    """Generator return given data from database"""
+    command = f"select * from {table} where unit = ? and time >= ? and time <= ? order by time"
+    if table == "error":
+        fconv = sql_item_to_error_item
+    elif table == "history":
+        fconv = sql_item_to_history_item
+    elif table == "candata":
+        fconv = sql_item_to_candata_item
+    else:
+        raise Exception("Table not implemented yet")
+    async with aiosqlite.connect(db_path) as _db:
+        async with _db.execute(command,(meta['id'],meta['start_ts'],meta['end_ts'])) as _cur:
+            async for x in _cur:
+                yield [fconv(x)], meta
+
 class SqlCache:
     """Sql cache can cache trackunit data in Sqlite DB"""
     def __init__(self,**kwargs):
-        self.web_db_path = kwargs.get('db_path','sqlcache.sqlite')
-        create_tables = not os.path.isfile(self.web_db_path)
-        self._db = sqlite3.connect(self.web_db_path)
-        assert self._db is not None
+        self.verbose = kwargs.get('verbose',False)
+        self.db_path = kwargs.get('db_path','sqlcache.sqlite')
+        self.tdelta_end = kwargs.get('tdelta_end',None)
         cache1_kwargs = deepcopy(kwargs)
         cache1_kwargs['dont_cache_data'] = kwargs.get('sql_cache1_dont_cache_data',True)
         self.cache1 = kwargs.get('sql_cache1',TuCache(**cache1_kwargs))
         self.cache2 = kwargs.get('sql_cache2',TuCache(**kwargs))
-        self.tdelta_end = None
-        if create_tables:
-            cur = self._db.cursor()
-            cur.execute(CREATE_HISTORY_TABLE)
-            cur.execute(CREATE_HISTORY_META)
-            cur.execute(CREATE_ERROR_META_TABLE)
-            cur.execute(CREATE_ERROR_DATA_TABLE)
-            cur.execute(CREATE_CANDATA_META_TABLE)
-            cur.execute(CREATE_CANDATA_DATA_TABLE)
-            self._db.commit()
-    def clean(self):
+        self.db_connection = None
+        self.connect()
+
+    def connect(self):
+        """Connects the SqlCache and sets up db_connection"""
+        if self.db_connection is not None:
+            raise Exception("Cant connect twice")
+        no_db_present = not os.path.isfile(self.db_path)
+        self.db_connection = sqlite3.connect(self.db_path)
+        if no_db_present:
+            create_tables(self.db_path)
+
+    def close(self):
+        """closes database connection"""
+        if self.db_connection is None:
+            return
+        self.db_connection.close()
+        self.db_connection = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _type, value, traceback):
+        self.close()
+
+    def reset(self,remove_data=False):
         """removes database file"""
-        if self._db is not None:
-            self._db.close()
-            os.remove(self.web_db_path)
-            self._db = None
+        self.close()
+        if remove_data:
+            os.remove(self.db_path)
+        self.connect()
+
     async def get_unitlist(self):
         """returns a list of vehicles"""
         return await self.cache2.get_unitlist()
+
     # pylint: disable=too-many-arguments
     def get_general_upstream(self, table, veh_id, start_ts, end_ts, previter=None):
         """gets errors from upstream cache"""
-        cur = self._db.cursor()
-
-        cur.execute(f"INSERT INTO {table}meta VALUES (?,?,?)",(veh_id,start_ts,end_ts))
-        # wait until data is in database and commit then
-        #self._db.commit()
 
         start = datetime.fromtimestamp(start_ts/1000.0)
         end = datetime.fromtimestamp(end_ts/1000.0)
@@ -398,10 +440,12 @@ class SqlCache:
 
         meta = {}
         meta["id"] = veh_id
+        meta["start_ts"] = start_ts
+        meta["end_ts"] = end_ts
         meta["start"] = start
         meta["end"] = end
 
-        wrap_iter = SqlInsertIter(table,int_data_iter,meta,self._db)
+        wrap_iter = SqlInsertIter(self.db_path,table,int_data_iter,meta,self.verbose)
 
         if previter is None:
             previter = TuIter()
@@ -411,64 +455,57 @@ class SqlCache:
         return previter, _len
     def get_general_sql(self, table, veh_id, start_ts, end_ts, previter=None):
         """gets data of this period from db whether or not it was actually stored there"""
-        cur = self._db.cursor()
 
-        cnt = next(cur.execute(\
-            f"""
+        cur = self.db_connection.execute(f"""
             select count(*) from {table} where
             unit = ? and time >= ? and time <= ?
             order by time
-            """,(veh_id,start_ts,end_ts)))[0]
+            """,(veh_id,start_ts,end_ts))
+        cnt = cur.fetchone()[0]
 
-        print("found",cnt,"in sql")
+        if self.verbose:
+            print("found",cnt,"in sql")
 
         meta = {}
         meta["id"] = veh_id
-        meta["start"] = start_ts
-        meta["end"] = end_ts
+        meta["start_ts"] = start_ts
+        meta["end_ts"] = end_ts
 
         if previter is None:
             previter = TuIter()
 
         if cnt > 0:
-            if table == "error":
-                fconv = sql_item_to_error_item
-            elif table == "history":
-                fconv = sql_item_to_history_item
-            elif table == "candata":
-                fconv = sql_item_to_candata_item
-            else:
-                raise Exception("Table not implemented yet")
-            previter.add(SqlIter(iter(map(lambda x: [x],map(fconv,cur.execute(\
-                f"select * from {table} where unit = ? and time >= ? and time <= ? order by time",\
-                    (veh_id,start_ts,end_ts))))),meta))
-        else:
+            previter.add(SqlReturnIter(self.db_path,table,meta))
+        elif self.verbose:
             print("could not find any item in block ", start_ts, end_ts,"for unit",veh_id)
 
         return previter, cnt
     def get_general_unixts(self, table, veh_id, start_ts, end_ts, previter=None):
         """returns error in between the given datetime objects"""
 
-        cur = self._db.cursor()
-
         # Query meta database to check whether there the data is in database
-        try:
-            me_vehid, me_start, me_end = next(iter(cur.execute(f"""
-                select * from {table}meta where unit = ? and (
-                (start <= ? and end > ?) or 
-                (start < ? and end >= ?) or
-                (start >= ? and end <= ?)
-                ) order by start
-                """,(veh_id,start_ts,start_ts,end_ts,end_ts,start_ts,end_ts))))
-            me_start = int(float(me_start))
-            me_end = int(float(me_end))
-        except StopIteration:
-            print("Stop iteration. Didnt find",\
-                veh_id,start_ts,end_ts,\
-                "Get errors from upstream now")
+        cur = self.db_connection.execute(f"""
+            select * from {table}meta where unit = ? and (
+            (start <= ? and end > ?) or 
+            (start < ? and end >= ?) or
+            (start >= ? and end <= ?)
+            ) order by start
+            """,(veh_id,start_ts,start_ts,end_ts,end_ts,start_ts,end_ts))
+        first = cur.fetchone()
+        if first is not None:
+            me_vehid, me_start, me_end = first[0], first[1], first[2]
+        else:
+            if self.verbose:
+                print("Stop iteration. Didnt find",\
+                    veh_id,start_ts,end_ts,\
+                    "Get errors from upstream now")
             return self.get_general_upstream(table,veh_id,start_ts,end_ts,previter)
 
-        print("Found block",me_vehid,me_start,me_end)
+        me_start = int(float(me_start))
+        me_end = int(float(me_end))
+
+        if self.verbose:
+            print("Found block",me_vehid,me_start,me_end)
 
         # Depending on the start and end of the next block, apply divide and conquer
         # by recursive calls of this function.

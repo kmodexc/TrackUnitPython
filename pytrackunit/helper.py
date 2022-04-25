@@ -2,38 +2,12 @@
 
 from datetime import datetime, timedelta
 from copy import deepcopy
-import matplotlib.pyplot as plt
-import matplotlib.dates
 from  dateutil.parser.isoparser import isoparse
-
-def plot_can_val(_data,valname,filename=None):
-    """plot value from getCanData"""
-    data = filter(lambda x:x['name'] == valname,_data)
-    plot_val(data,'value',filename)
 
 def get_datetime(time_string):
     """transforms trackunit time string to datetime"""
     #return datetime.strptime(time_string.split('.')[0],"%Y-%m-%dT%H:%M:%S")
     return isoparse(time_string)
-
-def plot_val(_data,valname,filename=None):
-    """plots a value from data (expected format from getHistory)"""
-    data = (map(lambda x: (x['time'],x[valname]),_data))
-    data = (set(data))
-    data = (map(lambda x: (get_datetime(x[0]),float(x[1])),data))
-    data = list(data)
-    data.sort(key=lambda x: x[0])
-    dates = list(map(lambda x: x[0], data))
-    dates = matplotlib.dates.date2num(dates)
-    fig, _ax = plt.subplots()#marker='', linestyle='-'
-    values = list(map(lambda x: x[1], data))
-    _ax.plot_date(dates, values ,fmt=",-")
-    _ax.locator_params(axis="y", nbins=10)
-    fig.autofmt_xdate()
-    if filename is not None:
-        plt.savefig(filename)
-    else:
-        plt.show()
 
 def get_next_section(data,finsec,fendsec=None,min_insec_len=None,min_endsec_len=0):
     """
@@ -117,3 +91,15 @@ def start_end_from_tdelta(tdelta, preset_end=None):
             return end, end
         start = end-timedelta(days=irange)
     return start, end
+
+class SecureString:
+    """This will just hide the api_key from being printed"""
+    def __init__(self,_str):
+        """Creates the opject with given string as data"""
+        self.string = _str
+    def gets(self):
+        """returns the string"""
+        return self.string
+    def sets(self,value):
+        """sets the string to value"""
+        self.string = value

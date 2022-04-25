@@ -1,9 +1,4 @@
 import math
-from numpy import mat
-import hashlib
-from os import remove
-from os.path import isfile
-from time import sleep
 from copy import deepcopy
 from pytrackunit.helper import *
 
@@ -11,42 +6,6 @@ from pytrackunit.helper import *
 END_UNIX_TS = datetime(year=2022,month=2,day=20,hour=10,second=10,microsecond=10000).timestamp()
 END_UNIX_WITHOUT_TIME = datetime(year=2022,month=2,day=20).timestamp()
 START_UNIX_TS = datetime(year=2022,month=2,day=10).timestamp()
-
-# ------ plot_can_val -------
-
-def test_plot_can_val():
-	propname = 'test-prop'
-
-	testobj = {}
-	testobj['time'] = '2021-06-18T13:18:18.0Z'
-	testobj['name'] = propname
-	testobj['value'] = 0.0
-	data = []
-	for i in range(3000):		
-		to = deepcopy(testobj)
-		time = datetime.fromtimestamp(END_UNIX_TS+i*100)
-		to['time'] = time.isoformat()
-		to['value'] = math.sin(i/100)
-		data.append(to)
-
-	filename = 'outfile.png'
-	
-	plot_can_val(data,propname,filename)
-
-	for i in range(1000):
-		if isfile(filename):
-			break
-		sleep(1)
-
-	sha256_hash = hashlib.sha256()
-	with open(filename,"rb") as f:
-		for byte_block in iter(lambda: f.read(4096),b""):
-			sha256_hash.update(byte_block)
-	
-	# github doesnt like this
-	# assert sha256_hash.hexdigest() == '5c3922902660f8164bea9837aa2cbd9c124b5cd2571b50c1bfd522d14f00784c'
-
-	remove(filename)
 
 # ------ get_datetime -------
 
@@ -59,41 +18,6 @@ def test_get_datetime():
 	assert dt.time().minute == 32
 	assert dt.time().second == 13
 	assert dt.time().microsecond == 100000 
-
-# ------ plot_val -------
-
-def test_plot_val():
-	propname = 'test-prop'
-
-	testobj = {}
-	testobj['time'] = '2021-06-18T13:18:18.0Z'
-	testobj[propname] = 0.0
-	data = []
-	for i in range(3000):
-		to = deepcopy(testobj)
-		time = datetime.fromtimestamp(END_UNIX_TS+i*100)
-		to['time'] = time.isoformat()
-		to[propname] = math.sin(i/100)
-		data.append(to)
-
-	filename = 'outfile.png'
-	
-	plot_val(data,propname,filename)
-
-	for i in range(1000):
-		if isfile(filename):
-			break
-		sleep(1)
-
-	sha256_hash = hashlib.sha256()
-	with open(filename,"rb") as f:
-		for byte_block in iter(lambda: f.read(4096),b""):
-			sha256_hash.update(byte_block)
-	
-	# github doesnt like this
-	# assert sha256_hash.hexdigest() == '5c3922902660f8164bea9837aa2cbd9c124b5cd2571b50c1bfd522d14f00784c'
-
-	remove(filename)
 
 # ------ get_next_section -------
 

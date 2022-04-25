@@ -40,7 +40,8 @@ class WebCache:
         if kwargs.get('verbose',False):
             print("WebCaches args:",kwargs)
         auth_tuple = kwargs.get("auth",None)
-        self.auth = BasicAuth(auth_tuple[0],auth_tuple[1]) if auth_tuple is not None else None
+        self.auth = BasicAuth(auth_tuple[0].gets(),auth_tuple[1].gets()) \
+            if auth_tuple is not None else None
         self.verbose = kwargs.get("verbose",False)
         self.dir = kwargs.get("webcache_dir","web-cache")
         self.dont_read_files = kwargs.get("dont_read_files",False)

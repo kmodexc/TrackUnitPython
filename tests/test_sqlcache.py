@@ -1,4 +1,5 @@
 from copy import deepcopy
+from tabnanny import verbose
 import pytest
 from datetime import datetime, timedelta
 from pytrackunit.sqlcache import *
@@ -6,6 +7,8 @@ import os
 import os.path
 import json
 from dateutil.parser import isoparse
+import sqlite3
+from pytrackunit.helper import SecureString
 
 pytest_plugins = ('pytest_asyncio',)
 
@@ -16,8 +19,9 @@ VEH = '2552712'
 START = datetime(2022,1,1,10,0,0,1000)
 END = datetime(2022,1,30,10,0,0,1000)
 MID = datetime(2022,1,15,10,0,0,1000)
-API_KEY = open("api.key").read()
-AUTH = ('API',API_KEY)
+#API_KEY = open("api.key").read()
+API_KEY = "asdfasdfasdfasdfasdfasdfasdfasdf"
+AUTH = (SecureString('API'),SecureString(API_KEY))
 
 EXAMPLE_HIST_OBJ = json.loads("""{
                     "accessKey": "",
@@ -70,6 +74,8 @@ class CacheForTests:
         self.testobj["description"] = "7"
         self.testmeta = {}
         self.testmeta["id"] = VEH
+        self.testmeta["start_ts"] = START.timestamp()
+        self.testmeta["end_ts"] = END.timestamp()
         self.modifiy_time = True
     def get_testobj(self, nr,time=None):
         obj = deepcopy(self.testobj)
@@ -144,39 +150,6 @@ class CacheForTests:
         self.previter.append(previter)
         return self.ret_candata_generator(10*(len(self.veh_id)-1),_start), 10
 
-class PseudoDB:
-    class PseudoDBCursor:
-        def __init__(self,throw_integrity_error=-1):
-            self.exm_command = []
-            self.exm_data = []
-            self.throw_integrity_error=throw_integrity_error
-            self.ex_command = []
-            self.ex_data = []
-        def execute(self,command,data):
-            print("PseudodbCursor",command,data)
-            self.ex_command.append(command)
-            self.ex_data.append(data)
-            if len(self.ex_data) == self.throw_integrity_error:
-                raise sqlite3.IntegrityError("Test Integrity Error")
-        def executemany(self,command,data):
-            self.exm_command.append(command)
-            self.exm_data.append(list(data))
-            if len(self.exm_data) == self.throw_integrity_error:
-                raise sqlite3.IntegrityError("Test Integrity Error")
-    def __init__(self):
-        self.throw_integrity_error=-1
-        self.commit_cnt = 0
-        self.cursors = []
-        self.rollback_cnt = 0
-    def commit(self):
-        self.commit_cnt += 1
-    def cursor(self):
-        cursor = self.PseudoDBCursor(self.throw_integrity_error)
-        self.cursors.append(cursor)
-        return cursor
-    def rollback(self):
-        self.rollback_cnt += 1
-
 def dict_equal(x,y):
     for k in x:
         if not x[k] == "none" and k in y: 
@@ -187,6 +160,16 @@ def dict_equal(x,y):
             if not x[k] == y[k]:
                 return False
     return True
+
+# ---------------- create_tables ---------------------
+
+def test_create_table():
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    create_tables(db_path)
+    os.remove(db_path)
+    create_tables(db_path)
+    os.remove(db_path)
 
 # ---------------- candata_item_to_sql_item ---------------------
 
@@ -291,67 +274,76 @@ def test_history_item_conversion():
 
 @pytest.mark.asyncio
 async def test_sqlinsertiter():
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+
     cache = CacheForTests()
-    db = PseudoDB()
-    it = SqlInsertIter("error",cache.ret_val_generator(0,MID),cache.testmeta,db)
+    create_tables(db_path)
+    it = SqlInsertIter(db_path,"error",cache.ret_val_generator(0,MID),cache.testmeta,verbose=True)
     async for x in it:
         print(x)
-    assert len(db.cursors) == 1
-    assert len(db.cursors[0].exm_command) == 10
-    assert len(db.cursors[0].exm_data) == 10
-    assert len(db.cursors[0].exm_data[0]) == 1
-    assert db.cursors[0].exm_command[0] == "INSERT INTO error VALUES (?,?,?,?,?,?,?)"
-    #assert db.cursors[0].exm_data[-1][0] == error_item_to_sql_item(cache.testobj,cache.testmeta)
 
+    with sqlite3.connect(db_path) as db:
+        with db:
+            cur = db.execute("select count(*) from error")
+            assert 10 == cur.fetchone()[0]
+    
+    
+    
 @pytest.mark.asyncio
 async def test_sqlinsertiter_integrity_error():
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+
+    db = sqlite3.connect(db_path)
+
     cache = CacheForTests()
-    db = PseudoDB()
-    db.throw_integrity_error=5
-    it = SqlInsertIter("error",cache.ret_val_generator(0,START),cache.testmeta,db)
-    cnt = 0
+    create_tables(db_path)
+    it = SqlInsertIter(db_path,"error",cache.ret_val_generator(0,MID),cache.testmeta,verbose=True)
+    async for x in it:
+        print(x)
 
     with pytest.raises(sqlite3.IntegrityError) as exc:
+        it = SqlInsertIter(db_path,"error",cache.ret_val_generator(0,MID),cache.testmeta,verbose=True)
         async for x in it:
             print(x)
-            cnt += 1
 
-    assert len(db.cursors) == 1
-    assert len(db.cursors[0].exm_data) == 5
-    assert len(db.cursors[0].ex_data) == 1
-    assert db.rollback_cnt == 1
-    assert db.commit_cnt == 0
+    db.execute("delete from error")
+    db.execute("delete from errormeta")
+    db.commit()
 
-    print("second attempt")
+    cur = db.execute("select count(*) from error")
+    assert 0 == cur.fetchone()[0]
+    
+    it = SqlInsertIter(db_path,"error",cache.ret_val_generator(0,MID),cache.testmeta,verbose=True)
+    async for x in it:
+        print(x)
 
-    db.throw_integrity_error=-1
-
-    it = SqlInsertIter("error",cache.ret_val_generator(0,START),cache.testmeta,db)
-    cnt = 0  
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.get_testobj(cnt,START)
-        cnt += 1
-
-    assert len(db.cursors) == 2
-    assert len(db.cursors[0].exm_data) == 5
-    assert len(db.cursors[0].ex_data) == 1
-    assert len(db.cursors[1].exm_data) == 10
-    assert len(db.cursors[1].ex_data) == 0
-    assert db.rollback_cnt == 1
-    assert db.commit_cnt == 1
+    cur = db.cursor()
+    cur = db.execute("select count(*) from error")
+    cnt = cur.fetchone()[0]
+    assert 10 == cnt
+    db.close()
 
 # ---------------- SqlCache init ---------------------
     
 def test_init():
-    cache = SqlCache(db_path=db_path)
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(db_path=db_path) as cache:
+        pass
+    os.remove(db_path)
 
-# ---------------- SqlCache clean ---------------------
+# ---------------- SqlCache reset ---------------------
 
-def test_clean():
-    cache = SqlCache(db_path=db_path)
-    assert os.path.isfile(db_path)
-    cache.clean()
+def test_reset():
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(db_path=db_path) as cache: 
+        assert os.path.isfile(db_path)
+        cache.reset(True)
+        assert os.path.isfile(db_path)
+    os.remove(db_path)
     assert not os.path.isfile(db_path)
 
 # ---------------- SqlCache get_general_upstream ---------------------
@@ -363,323 +355,352 @@ def test_clean():
 # ---------------- SqlCache get_faults_timedelta ---------------------
 
 def test_get_faults_timedelta():
-    cache = SqlCache(db_path=db_path)
-    cache.clean()
-    cache = SqlCache(auth=AUTH,_dir=None,db_path=db_path)
-    cache.get_faults_timedelta(VEH,START,END)
-    cache.clean()
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    
+    with SqlCache(auth=AUTH,_dir=None,db_path=db_path) as cache:
+        cache.get_faults_timedelta(VEH,START,END)
 
 def test_get_faults_twice():
-    cache = SqlCache(auth = AUTH,_dir=None,db_path=db_path)
-    cache.get_faults_timedelta(VEH,START,END)
-    res = cache.get_faults_timedelta(VEH,START,END)
-    cache.clean()
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    
+    with SqlCache(auth=AUTH,_dir=None,db_path=db_path) as cache:
+        cache.get_faults_timedelta(VEH,START,END)
+        res = cache.get_faults_timedelta(VEH,START,END)
 
 @pytest.mark.asyncio
 async def test_with_mock_same_block():
-    cache = SqlCache(auth=AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests())
-    it, cnt = cache.get_faults_timedelta(VEH,START,END)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_testobj(cnt,START)
-        cnt += 1
-    assert cnt == 10
-    print("second get")
-    it, cnt = cache.get_faults_timedelta(VEH,START,END)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_testobj(cnt,START)
-        cnt += 1
-    assert cnt == 10
-    assert len(cache.cache1.veh_id) == 1
-    assert len(cache.cache1.start) == 1
-    assert len(cache.cache1.end) == 1
-    assert len(cache.cache1.previter) == 1
-    for x in cache.cache1.veh_id:
-        assert x == VEH
-    for x in cache.cache1.start:
-        assert x == START
-    for x in cache.cache1.end:
-        assert x == END
-    for x in cache.cache1.previter:
-        assert x == None
-    cache.clean()
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(auth=AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+        it, cnt = cache.get_faults_timedelta(VEH,START,END)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_testobj(cnt,START)
+            cnt += 1
+        assert cnt == 10
+        print("second get")
+        it, cnt = cache.get_faults_timedelta(VEH,START,END)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_testobj(cnt,START)
+            cnt += 1
+        assert cnt == 10
+        assert len(cache.cache1.veh_id) == 1
+        assert len(cache.cache1.start) == 1
+        assert len(cache.cache1.end) == 1
+        assert len(cache.cache1.previter) == 1
+        for x in cache.cache1.veh_id:
+            assert x == VEH
+        for x in cache.cache1.start:
+            assert x == START
+        for x in cache.cache1.end:
+            assert x == END
+        for x in cache.cache1.previter:
+            assert x == None
+    if os.path.isfile(db_path):
+        os.remove(db_path)
 
 @pytest.mark.asyncio
 async def test_with_mock_smaller_block():
-    cache = SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests())
-    cache.cache1.modifiy_time = False
-    it, cnt = cache.get_faults_timedelta(VEH,START,END)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_testobj(cnt,START+timedelta(days=14))
-        cnt += 1
-    assert cnt == 10
-    print("second get")
-    it, cnt = cache.get_faults_timedelta(VEH,START+timedelta(days=10),END-timedelta(days=10))
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_testobj(cnt,START+timedelta(days=14))
-        cnt += 1
-    assert cnt == 10
-    assert len(cache.cache1.veh_id) == 1
-    assert len(cache.cache1.start) == 1
-    assert len(cache.cache1.end) == 1
-    assert len(cache.cache1.previter) == 1
-    for x in cache.cache1.veh_id:
-        assert x == VEH
-    for x in cache.cache1.start:
-        assert x == START
-    for x in cache.cache1.end:
-        assert x == END
-    for x in cache.cache1.previter:
-        assert x == None
-    cache.clean()
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+        cache.cache1.modifiy_time = False
+        it, cnt = cache.get_faults_timedelta(VEH,START,END)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_testobj(cnt,MID)
+            cnt += 1
+        assert cnt == 10
+        print("second get")
+        it, cnt = cache.get_faults_timedelta(VEH,START+timedelta(days=10),END-timedelta(days=10))
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_testobj(cnt,START+timedelta(days=14))
+            cnt += 1
+        assert cnt == 10
+        assert len(cache.cache1.veh_id) == 1
+        assert len(cache.cache1.start) == 1
+        assert len(cache.cache1.end) == 1
+        assert len(cache.cache1.previter) == 1
+        for x in cache.cache1.veh_id:
+            assert x == VEH
+        for x in cache.cache1.start:
+            assert x == START
+        for x in cache.cache1.end:
+            assert x == END
+        for x in cache.cache1.previter:
+            assert x == None
+    if os.path.isfile(db_path):
+        os.remove(db_path)
 
 @pytest.mark.asyncio
 async def test_with_mock_bigger_block():
-    cache = SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests())
-    it, cnt = cache.get_faults_timedelta(VEH,START,END)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_testobj(cnt,START)
-        cnt += 1
-    assert cnt == 10
-    print("second get")
-    it, cnt = cache.get_faults_timedelta(VEH,START-timedelta(days=10),END+timedelta(days=10))
-    assert len(it.iterators) == 3
-    cnt = 0
-    async for x,meta in it.iterators[0]:
-        assert len(x) == 1
-        print(cnt)
-        assert x[0] == cache.cache1.get_testobj(cnt+10,START-timedelta(days=10))
-        cnt += 1
-    assert cnt == 10
-    print(it.iterators[1])
-    async for x,meta in it.iterators[1]:
-        assert len(x) == 1
-        print(cnt)
-        assert x[0] == cache.cache1.get_testobj(cnt-10,time=START)
-        cnt += 1
-    assert cnt == 20
-    async for x,meta in it.iterators[2]:
-        assert len(x) == 1
-        print(cnt)
-        assert x[0] == cache.cache1.get_testobj(cnt,time=END+timedelta(milliseconds=1))
-        cnt += 1
-    assert cnt == 30
-    assert len(cache.cache1.veh_id) == 3
-    assert len(cache.cache1.start) == 3
-    assert len(cache.cache1.end) == 3
-    assert len(cache.cache1.previter) == 3
-    for x in cache.cache1.veh_id:
-        assert x == VEH
-    # for x in cache.cache1.start:
-    #     assert x == START
-    # for x in cache.cache1.end:
-    #     assert x == END
-    for x in cache.cache1.previter:
-        assert x == None
-    cache.clean()
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+        it, cnt = cache.get_faults_timedelta(VEH,START,END)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_testobj(cnt,START)
+            cnt += 1
+        assert cnt == 10
+        print("second get")
+        it, cnt = cache.get_faults_timedelta(VEH,START-timedelta(days=10),END+timedelta(days=10))
+        assert len(it.iterators) == 3
+        cnt = 0
+        async for x,meta in it.iterators[0]:
+            assert len(x) == 1
+            print(cnt)
+            assert x[0] == cache.cache1.get_testobj(cnt+10,START-timedelta(days=10))
+            cnt += 1
+        assert cnt == 10
+        print(it.iterators[1])
+        async for x,meta in it.iterators[1]:
+            assert len(x) == 1
+            print(cnt)
+            assert x[0] == cache.cache1.get_testobj(cnt-10,time=START)
+            cnt += 1
+        assert cnt == 20
+        async for x,meta in it.iterators[2]:
+            assert len(x) == 1
+            print(cnt)
+            assert x[0] == cache.cache1.get_testobj(cnt,time=END+timedelta(milliseconds=1))
+            cnt += 1
+        assert cnt == 30
+        assert len(cache.cache1.veh_id) == 3
+        assert len(cache.cache1.start) == 3
+        assert len(cache.cache1.end) == 3
+        assert len(cache.cache1.previter) == 3
+        for x in cache.cache1.veh_id:
+            assert x == VEH
+        # for x in cache.cache1.start:
+        #     assert x == START
+        # for x in cache.cache1.end:
+        #     assert x == END
+        for x in cache.cache1.previter:
+            assert x == None
+    if os.path.isfile(db_path):
+        os.remove(db_path)
 
 @pytest.mark.asyncio
 async def test_with_mock_part_bigger_block_1():
-    cache = SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests())
-    it, cnt = cache.get_faults_timedelta(VEH,START,END)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_testobj(cnt,START)
-        cnt += 1
-    assert cnt == 10
-    print("second get")
-    it, cnt = cache.get_faults_timedelta(VEH,START-timedelta(days=10),END)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        cnt += 1
-    assert cnt == 20
-    assert len(cache.cache1.veh_id) == 2
-    assert len(cache.cache1.start) == 2
-    assert len(cache.cache1.end) == 2
-    assert len(cache.cache1.previter) == 2
-    for x in cache.cache1.veh_id:
-        assert x == VEH
-    # for x in cache.cache1.start:
-    #     assert x == START
-    # for x in cache.cache1.end:
-    #     assert x == END
-    for x in cache.cache1.previter:
-        assert x == None
-    cache.clean()
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+        it, cnt = cache.get_faults_timedelta(VEH,START,END)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_testobj(cnt,START)
+            cnt += 1
+        assert cnt == 10
+        print("second get")
+        it, cnt = cache.get_faults_timedelta(VEH,START-timedelta(days=10),END)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            cnt += 1
+        assert cnt == 20
+        assert len(cache.cache1.veh_id) == 2
+        assert len(cache.cache1.start) == 2
+        assert len(cache.cache1.end) == 2
+        assert len(cache.cache1.previter) == 2
+        for x in cache.cache1.veh_id:
+            assert x == VEH
+        # for x in cache.cache1.start:
+        #     assert x == START
+        # for x in cache.cache1.end:
+        #     assert x == END
+        for x in cache.cache1.previter:
+            assert x == None
+    if os.path.isfile(db_path):
+        os.remove(db_path)
 
 @pytest.mark.asyncio
 async def test_with_mock_part_bigger_block_2():
-    cache = SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests())
-    it, cnt = cache.get_faults_timedelta(VEH,START,END)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_testobj(cnt,START)
-        cnt += 1
-    assert cnt == 10
-    print("second get")
-    it, cnt = cache.get_faults_timedelta(VEH,START,END+timedelta(days=10))
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        cnt += 1
-    assert cnt == 20
-    assert len(cache.cache1.veh_id) == 2
-    assert len(cache.cache1.start) == 2
-    assert len(cache.cache1.end) == 2
-    assert len(cache.cache1.previter) == 2
-    for x in cache.cache1.veh_id:
-        assert x == VEH
-    # for x in cache.cache1.start:
-    #     assert x == START
-    # for x in cache.cache1.end:
-    #     assert x == END
-    for x in cache.cache1.previter:
-        assert x == None
-    cache.clean()
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+        it, cnt = cache.get_faults_timedelta(VEH,START,END)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_testobj(cnt,START)
+            cnt += 1
+        assert cnt == 10
+        print("second get")
+        it, cnt = cache.get_faults_timedelta(VEH,START,END+timedelta(days=10))
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            cnt += 1
+        assert cnt == 20
+        assert len(cache.cache1.veh_id) == 2
+        assert len(cache.cache1.start) == 2
+        assert len(cache.cache1.end) == 2
+        assert len(cache.cache1.previter) == 2
+        for x in cache.cache1.veh_id:
+            assert x == VEH
+        # for x in cache.cache1.start:
+        #     assert x == START
+        # for x in cache.cache1.end:
+        #     assert x == END
+        for x in cache.cache1.previter:
+            assert x == None
+    if os.path.isfile(db_path):
+        os.remove(db_path)
 
 @pytest.mark.asyncio
 async def test_with_mock_overlapping_1():
-    cache = SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests())
-    it, cnt = cache.get_faults_timedelta(VEH,START,END)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_testobj(cnt,START)
-        cnt += 1
-    assert cnt == 10
-    print("second get")
-    it, cnt = cache.get_faults_timedelta(VEH,START-timedelta(days=10),END-timedelta(days=10))
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        cnt += 1
-    assert cnt == 20
-    assert len(cache.cache1.veh_id) == 2
-    assert len(cache.cache1.start) == 2
-    assert len(cache.cache1.end) == 2
-    assert len(cache.cache1.previter) == 2
-    for x in cache.cache1.veh_id:
-        assert x == VEH
-    # for x in cache.cache1.start:
-    #     assert x == START
-    # for x in cache.cache1.end:
-    #     assert x == END
-    for x in cache.cache1.previter:
-        assert x == None
-    cache.clean()
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+        it, cnt = cache.get_faults_timedelta(VEH,START,END)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_testobj(cnt,START)
+            cnt += 1
+        assert cnt == 10
+        print("second get")
+        it, cnt = cache.get_faults_timedelta(VEH,START-timedelta(days=10),END-timedelta(days=10))
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            cnt += 1
+        assert cnt == 20
+        assert len(cache.cache1.veh_id) == 2
+        assert len(cache.cache1.start) == 2
+        assert len(cache.cache1.end) == 2
+        assert len(cache.cache1.previter) == 2
+        for x in cache.cache1.veh_id:
+            assert x == VEH
+        # for x in cache.cache1.start:
+        #     assert x == START
+        # for x in cache.cache1.end:
+        #     assert x == END
+        for x in cache.cache1.previter:
+            assert x == None
+    if os.path.isfile(db_path):
+        os.remove(db_path)
 
 @pytest.mark.asyncio
 async def test_with_mock_overlapping_2():
-    cache = SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests())
-    it, cnt = cache.get_faults_timedelta(VEH,START,END)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_testobj(cnt,START)
-        cnt += 1
-    assert cnt == 10
-    print("second get")
-    it, cnt = cache.get_faults_timedelta(VEH,START+timedelta(days=10),END+timedelta(days=10))
-    async for x,meta in it:
-        assert len(x) == 1
-        cnt += 1
-    assert cnt == 20
-    assert len(cache.cache1.veh_id) == 2
-    assert len(cache.cache1.start) == 2
-    assert len(cache.cache1.end) == 2
-    assert len(cache.cache1.previter) == 2
-    for x in cache.cache1.veh_id:
-        assert x == VEH
-    # for x in cache.cache1.start:
-    #     assert x == START
-    # for x in cache.cache1.end:
-    #     assert x == END
-    for x in cache.cache1.previter:
-        assert x == None
-    cache.clean()
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+        it, cnt = cache.get_faults_timedelta(VEH,START,END)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_testobj(cnt,START)
+            cnt += 1
+        assert cnt == 10
+        print("second get")
+        it, cnt = cache.get_faults_timedelta(VEH,START+timedelta(days=10),END+timedelta(days=10))
+        async for x,meta in it:
+            assert len(x) == 1
+            cnt += 1
+        assert cnt == 20
+        assert len(cache.cache1.veh_id) == 2
+        assert len(cache.cache1.start) == 2
+        assert len(cache.cache1.end) == 2
+        assert len(cache.cache1.previter) == 2
+        for x in cache.cache1.veh_id:
+            assert x == VEH
+        # for x in cache.cache1.start:
+        #     assert x == START
+        # for x in cache.cache1.end:
+        #     assert x == END
+        for x in cache.cache1.previter:
+            assert x == None
+    if os.path.isfile(db_path):
+        os.remove(db_path)
 
 # ---------------- SqlCache get_faults ---------------------
 
 @pytest.mark.asyncio
 async def test_get_faults_tdelta_timedelta():
-    cache = SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests())
-    cache.tdelta_end = END
-    start,end = start_end_from_tdelta(END-START,END)
-    it, cnt = cache.get_faults(VEH,END-START)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_testobj(cnt,start)
-        cnt += 1
-    assert cnt == 10
-    print("second get")
-    it, cnt = cache.get_faults(VEH,END-START)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_testobj(cnt,start)
-        cnt += 1
-    assert cnt == 10
-    assert len(cache.cache1.veh_id) == 1
-    assert len(cache.cache1.start) == 1
-    assert len(cache.cache1.end) == 1
-    assert len(cache.cache1.previter) == 1
-    for x in cache.cache1.veh_id:
-        assert x == VEH
-    for x in cache.cache1.start:
-        pass
-        #assert x == START
-    for x in cache.cache1.end:
-        pass
-        #assert x == END
-    for x in cache.cache1.previter:
-        assert x == None
-    cache.clean()
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+        cache.tdelta_end = END
+        start,end = start_end_from_tdelta(END-START,END)
+        it, cnt = cache.get_faults(VEH,END-START)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_testobj(cnt,start)
+            cnt += 1
+        assert cnt == 10
+        print("second get")
+        it, cnt = cache.get_faults(VEH,END-START)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_testobj(cnt,start)
+            cnt += 1
+        assert cnt == 10
+        assert len(cache.cache1.veh_id) == 1
+        assert len(cache.cache1.start) == 1
+        assert len(cache.cache1.end) == 1
+        assert len(cache.cache1.previter) == 1
+        for x in cache.cache1.veh_id:
+            assert x == VEH
+        for x in cache.cache1.start:
+            pass
+            #assert x == START
+        for x in cache.cache1.end:
+            pass
+            #assert x == END
+        for x in cache.cache1.previter:
+            assert x == None
+    if os.path.isfile(db_path):
+        os.remove(db_path)
 
 @pytest.mark.asyncio
 async def test_get_faults_tdelta_int_days():
-    cache = SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests())
-    cache.tdelta_end = END
-    start,end = start_end_from_tdelta(30,END)
-    it, cnt = cache.get_faults(VEH,30)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_testobj(cnt,start)
-        cnt += 1
-    assert cnt == 10
-    print("second get")
-    it, cnt = cache.get_faults(VEH,30)
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_testobj(cnt-10,start)
-        cnt += 1
-    assert cnt == 20
-    assert len(cache.cache1.veh_id) == 1
-    assert len(cache.cache1.start) == 1
-    assert len(cache.cache1.end) == 1
-    assert len(cache.cache1.previter) == 1
-    for x in cache.cache1.veh_id:
-        assert x == VEH
-    # for x in cache.cache1.start:
-    #     assert x == START
-    # for x in cache.cache1.end:
-    #     assert x == END
-    for x in cache.cache1.previter:
-        assert x == None
-    cache.clean()
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+        cache.tdelta_end = END
+        start,end = start_end_from_tdelta(30,END)
+        it, cnt = cache.get_faults(VEH,30)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_testobj(cnt,start)
+            cnt += 1
+        assert cnt == 10
+        print("second get")
+        it, cnt = cache.get_faults(VEH,30)
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_testobj(cnt-10,start)
+            cnt += 1
+        assert cnt == 20
+        assert len(cache.cache1.veh_id) == 1
+        assert len(cache.cache1.start) == 1
+        assert len(cache.cache1.end) == 1
+        assert len(cache.cache1.previter) == 1
+        for x in cache.cache1.veh_id:
+            assert x == VEH
+        # for x in cache.cache1.start:
+        #     assert x == START
+        # for x in cache.cache1.end:
+        #     assert x == END
+        for x in cache.cache1.previter:
+            assert x == None
+    if os.path.isfile(db_path):
+        os.remove(db_path)
 
 # ---------------- SqlCache get_history_timedelta ---------------------
 
@@ -687,76 +708,82 @@ async def test_get_faults_tdelta_int_days():
 
 @pytest.mark.asyncio
 async def test_get_history_tdelta_timedelta():
-    cache = SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests())
-    cache.tdelta_end = END
-    start,end = start_end_from_tdelta(END-START,END)
-    it, cnt = cache.get_history(VEH,END-START)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_hist_obj(cnt,start)
-        cnt += 1
-    assert cnt == 10
-    print("second get")
-    it, cnt = cache.get_history(VEH,END-START)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert dict_equal(x[0],cache.cache1.get_testobj(cnt,start))
-        cnt += 1
-    assert cnt == 10
-    assert len(cache.cache1.veh_id) == 1
-    assert len(cache.cache1.start) == 1
-    assert len(cache.cache1.end) == 1
-    assert len(cache.cache1.previter) == 1
-    for x in cache.cache1.veh_id:
-        assert x == VEH
-    for x in cache.cache1.start:
-        pass
-        #assert x == START
-    for x in cache.cache1.end:
-        pass
-        #assert x == END
-    for x in cache.cache1.previter:
-        assert x == None
-    cache.clean()
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+        cache.tdelta_end = END
+        start,end = start_end_from_tdelta(END-START,END)
+        it, cnt = cache.get_history(VEH,END-START)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_hist_obj(cnt,start)
+            cnt += 1
+        assert cnt == 10
+        print("second get")
+        it, cnt = cache.get_history(VEH,END-START)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert dict_equal(x[0],cache.cache1.get_testobj(cnt,start))
+            cnt += 1
+        assert cnt == 10
+        assert len(cache.cache1.veh_id) == 1
+        assert len(cache.cache1.start) == 1
+        assert len(cache.cache1.end) == 1
+        assert len(cache.cache1.previter) == 1
+        for x in cache.cache1.veh_id:
+            assert x == VEH
+        for x in cache.cache1.start:
+            pass
+            #assert x == START
+        for x in cache.cache1.end:
+            pass
+            #assert x == END
+        for x in cache.cache1.previter:
+            assert x == None
+    if os.path.isfile(db_path):
+        os.remove(db_path)
 
 @pytest.mark.asyncio
 async def test_get_history_tdelta_int_days():
-    cache = SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests())
-    cache.tdelta_end = END
-    start,end = start_end_from_tdelta(30,END)
-    it, cnt = cache.get_history(VEH,30)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_hist_obj(cnt,start)
-        cnt += 1
-    assert cnt == 10
-    print("second get")
-    cnt = 0
-    print(cache.cache1.get_testobj(0,start))
-    print(cache.cache1.get_testobj(1,start))
-    it, cnt = cache.get_history(VEH,30)
-    async for x,meta in it:
-        assert len(x) == 1
-        # if not dict_equal(x[0],cache.cache1.get_testobj(cnt,start)):
-        #     assert x[0] == cache.cache1.get_testobj(cnt,start)
-        cnt += 1
-    assert cnt == 20
-    assert len(cache.cache1.veh_id) == 1
-    assert len(cache.cache1.start) == 1
-    assert len(cache.cache1.end) == 1
-    assert len(cache.cache1.previter) == 1
-    for x in cache.cache1.veh_id:
-        assert x == VEH
-    # for x in cache.cache1.start:
-    #     assert x == START
-    # for x in cache.cache1.end:
-    #     assert x == END
-    for x in cache.cache1.previter:
-        assert x == None
-    cache.clean()
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+        cache.tdelta_end = END
+        start,end = start_end_from_tdelta(30,END)
+        it, cnt = cache.get_history(VEH,30)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_hist_obj(cnt,start)
+            cnt += 1
+        assert cnt == 10
+        print("second get")
+        cnt = 0
+        print(cache.cache1.get_testobj(0,start))
+        print(cache.cache1.get_testobj(1,start))
+        it, cnt = cache.get_history(VEH,30)
+        async for x,meta in it:
+            assert len(x) == 1
+            # if not dict_equal(x[0],cache.cache1.get_testobj(cnt,start)):
+            #     assert x[0] == cache.cache1.get_testobj(cnt,start)
+            cnt += 1
+        assert cnt == 20
+        assert len(cache.cache1.veh_id) == 1
+        assert len(cache.cache1.start) == 1
+        assert len(cache.cache1.end) == 1
+        assert len(cache.cache1.previter) == 1
+        for x in cache.cache1.veh_id:
+            assert x == VEH
+        # for x in cache.cache1.start:
+        #     assert x == START
+        # for x in cache.cache1.end:
+        #     assert x == END
+        for x in cache.cache1.previter:
+            assert x == None
+    if os.path.isfile(db_path):
+        os.remove(db_path)
 
 # ---------------- SqlCache get_candata_timedelta ---------------------
 
@@ -764,72 +791,77 @@ async def test_get_history_tdelta_int_days():
 
 @pytest.mark.asyncio
 async def test_get_candata_tdelta_timedelta():
-    cache = SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests())
-    cache.tdelta_end = END
-    start,end = start_end_from_tdelta(END-START,END)
-    it, cnt = cache.get_candata(VEH,END-START)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_candata_obj(cnt,start)
-        cnt += 1
-    assert cnt == 10
-    print("second get")
-    it, cnt = cache.get_candata(VEH,END-START)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        if not dict_equal(x[0] , cache.cache1.get_candata_obj(cnt,start)):
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+        cache.tdelta_end = END
+        start,end = start_end_from_tdelta(END-START,END)
+        it, cnt = cache.get_candata(VEH,END-START)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
             assert x[0] == cache.cache1.get_candata_obj(cnt,start)
-        cnt += 1
-    assert cnt == 10
-    assert len(cache.cache1.veh_id) == 1
-    assert len(cache.cache1.start) == 1
-    assert len(cache.cache1.end) == 1
-    assert len(cache.cache1.previter) == 1
-    for x in cache.cache1.veh_id:
-        assert x == VEH
-    for x in cache.cache1.start:
-        pass
-        #assert x == START
-    for x in cache.cache1.end:
-        pass
-        #assert x == END
-    for x in cache.cache1.previter:
-        assert x == None
-    cache.clean()
+            cnt += 1
+        assert cnt == 10
+        print("second get")
+        it, cnt = cache.get_candata(VEH,END-START)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            if not dict_equal(x[0] , cache.cache1.get_candata_obj(cnt,start)):
+                assert x[0] == cache.cache1.get_candata_obj(cnt,start)
+            cnt += 1
+        assert cnt == 10
+        assert len(cache.cache1.veh_id) == 1
+        assert len(cache.cache1.start) == 1
+        assert len(cache.cache1.end) == 1
+        assert len(cache.cache1.previter) == 1
+        for x in cache.cache1.veh_id:
+            assert x == VEH
+        for x in cache.cache1.start:
+            pass
+            #assert x == START
+        for x in cache.cache1.end:
+            pass
+            #assert x == END
+        for x in cache.cache1.previter:
+            assert x == None
+    if os.path.isfile(db_path):
+        os.remove(db_path)
 
 @pytest.mark.asyncio
 async def test_get_candata_tdelta_int_days():
-    cache = SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests())
-    cache.tdelta_end = END
-    start,end = start_end_from_tdelta(30,END)
-    it, cnt = cache.get_candata(VEH,30)
-    cnt = 0
-    async for x,meta in it:
-        assert len(x) == 1
-        assert x[0] == cache.cache1.get_candata_obj(cnt,start)
-        cnt += 1
-    assert cnt == 10
-    print("second get")
-    it, cnt = cache.get_candata(VEH,30)
-    async for x,meta in it:
-        assert len(x) == 1
-        if not dict_equal(x[0] , cache.cache1.get_candata_obj(cnt-10,start)):
-            assert x[0] == cache.cache1.get_candata_obj(cnt-10,start)
-        cnt += 1
-    assert cnt == 20
-    assert len(cache.cache1.veh_id) == 1
-    assert len(cache.cache1.start) == 1
-    assert len(cache.cache1.end) == 1
-    assert len(cache.cache1.previter) == 1
-    for x in cache.cache1.veh_id:
-        assert x == VEH
-    # for x in cache.cache1.start:
-    #     assert x == START
-    # for x in cache.cache1.end:
-    #     assert x == END
-    for x in cache.cache1.previter:
-        assert x == None
-    cache.clean()
-
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+        cache.tdelta_end = END
+        start,end = start_end_from_tdelta(30,END)
+        it, cnt = cache.get_candata(VEH,30)
+        cnt = 0
+        async for x,meta in it:
+            assert len(x) == 1
+            assert x[0] == cache.cache1.get_candata_obj(cnt,start)
+            cnt += 1
+        assert cnt == 10
+        print("second get")
+        it, cnt = cache.get_candata(VEH,30)
+        async for x,meta in it:
+            assert len(x) == 1
+            if not dict_equal(x[0] , cache.cache1.get_candata_obj(cnt-10,start)):
+                assert x[0] == cache.cache1.get_candata_obj(cnt-10,start)
+            cnt += 1
+        assert cnt == 20
+        assert len(cache.cache1.veh_id) == 1
+        assert len(cache.cache1.start) == 1
+        assert len(cache.cache1.end) == 1
+        assert len(cache.cache1.previter) == 1
+        for x in cache.cache1.veh_id:
+            assert x == VEH
+        # for x in cache.cache1.start:
+        #     assert x == START
+        # for x in cache.cache1.end:
+        #     assert x == END
+        for x in cache.cache1.previter:
+            assert x == None
+    if os.path.isfile(db_path):
+        os.remove(db_path)

@@ -20,25 +20,6 @@ class ReqIter:
         except StopIteration as exc:
             raise StopAsyncIteration from exc
 
-class SqlIter:
-    """iterator for tucache data"""
-    def __init__(self, sqliter, meta=None):
-        self.sqliter = sqliter
-        self.iter_started = False
-        self.meta = meta
-
-    def __aiter__(self):
-        if self.iter_started:
-            raise Exception("cant start tuiter more than once")
-        self.iter_started = True
-        return self
-
-    async def __anext__(self):
-        try:
-            return next(self.sqliter) , self.meta
-        except StopIteration as exc:
-            raise StopAsyncIteration from exc
-
 class TuIter:
     """iterator holding all internal iterators"""
     def __init__(self) -> None:
