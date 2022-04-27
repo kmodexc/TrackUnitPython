@@ -1,6 +1,7 @@
 """webcache module"""
 
 import traceback
+from threading import Semaphore
 import json
 import os
 from os.path import join
@@ -37,25 +38,33 @@ async def get_from_file(fname,dont_read=False):
 class WebCache:
     """WebCache class"""
     def __init__(self,**kwargs):
-        if kwargs.get('verbose',False):
-            print("WebCaches args:",kwargs)
+        self.settings = kwargs
+
         auth_tuple = kwargs.get("auth",None)
         self.auth = BasicAuth(auth_tuple[0].gets(),auth_tuple[1].gets()) \
             if auth_tuple is not None else None
-        self.verbose = kwargs.get("verbose",False)
-        self.dir = kwargs.get("webcache_dir","web-cache")
-        self.dont_read_files = kwargs.get("dont_read_files",False)
-        self.dont_return_data = kwargs.get("dont_return_data",False)
-        self.return_only_cache_files = kwargs.get("return_only_cache_files",False)
-        self.dont_cache_data = kwargs.get("dont_cache_data",False)
-        Path(self.dir).mkdir(parents=True, exist_ok=True)
+
+        self.settings.setdefault("verbose",False)
+        self.settings.setdefault("webcache_dir","web-cache")
+        self.settings.setdefault("dont_read_files",False)
+        self.settings.setdefault("dont_return_data",False)
+        self.settings.setdefault("return_only_cache_files",False)
+        self.settings.setdefault("dont_cache_data",False)
+        self.settings.setdefault("max_requests",1000)
+        if self.settings['verbose']:
+            print("WebCaches settings:",self.settings)
+
+        self.request_lock = Semaphore(self.settings['max_requests'])
+        Path(self.settings['webcache_dir']).mkdir(parents=True, exist_ok=True)
+
     def clean(self):
         """clean method"""
         try:
-            shutil.rmtree(self.dir)
+            shutil.rmtree(self.settings['webcache_dir'])
         except OSError:
             print("Error at TUCache clean:\n"+str(traceback.format_exc()))
-        Path(self.dir).mkdir(parents=True, exist_ok=True)
+        Path(self.settings['webcache_dir']).mkdir(parents=True, exist_ok=True)
+
     async def get_from_web(self,url: str) -> dict:
         """get_from_web method"""
         async with aiohttp.ClientSession() as session:
@@ -64,25 +73,27 @@ class WebCache:
                 _j = await response.json()
                 _t = await response.text()
                 return _j , _t
+
     async def get(self,url):
         """get method"""
-        if self.dont_cache_data:
+        if self.settings['dont_cache_data']:
             data, _ = await self.get_from_web(url)
             return data
         fname = md5(url.encode('utf-8')).hexdigest()+".json"
-        if self.return_only_cache_files:
+        if self.settings['return_only_cache_files']:
             return fname
-        fname = join(self.dir,fname)
-        data = await get_from_file(fname,self.dont_read_files)
+        fname = join(self.settings['webcache_dir'],fname)
+        data = await get_from_file(fname,self.settings['dont_read_files'])
         if data is None:
-            data, text = await self.get_from_web(url)
+            with self.request_lock:
+                data, text = await self.get_from_web(url)
             async with aiofiles.open(fname, mode='w+',encoding='utf8') as _fp:
                 await _fp.write(text)
-            if self.verbose:
+            if self.settings['verbose']:
                 print(url,len(text),"W")
         else:
-            if self.verbose:
+            if self.settings['verbose']:
                 print(url,len(str(data)),"C")
-        if self.dont_return_data:
+        if self.settings['dont_return_data']:
             return {}
         return data
