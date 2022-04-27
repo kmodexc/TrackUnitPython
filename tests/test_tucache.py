@@ -32,37 +32,35 @@ async def tolist(_iter):
 		data += i
 	return data
 def test_clean_start():
-	cache = TuCache(_dir="pytest-web-cache")
+	cache = TuCache(webcache_dir="pytest-web-cache")
 	cache.clean()
 def test_Clean_Dummy():
-	cache = TuCache(_dir="pytest-web-cache")
+	cache = TuCache(webcache_dir="pytest-web-cache")
 	cache.cache = CacheForTests()
 	assert not cache.cache._clean
 	cache.clean()
 	assert cache.cache._clean
 def test_Get_Check_Urls():
-	cache = TuCache(_dir="pytest-web-cache")
+	cache = TuCache(webcache_dir="pytest-web-cache")
 	cache.cache = CacheForTests()
 	data = asyncio.run(cache.get_url('Unit'))
 	assert len(cache.cache.urls) == 1
 	assert cache.cache.urls[0] == DUMMY_URL
 def test_Get_Check_Return():
-	cache = TuCache(_dir="pytest-web-cache")
+	cache = TuCache(webcache_dir="pytest-web-cache")
 	cache.cache = CacheForTests()
 	data = asyncio.run(cache.get_url('Unit'))
 	assert len(data) == 2
 	assert data[0]["val"] == 1
 	assert data[1]["val"] == 1
 def test_Get_return_hashes():
-	cache = TuCache(_dir="pytest-web-cache")
-	cache.cache.return_only_cache_files = True
+	cache = TuCache(webcache_dir="pytest-web-cache",return_only_cache_files=True)
 	cache.clean()
 	data = asyncio.run(cache.get_url('Unit'))
 	assert len(data) == 1
 	assert data[0] == "79fb93d6b6a0d19f2fb3b55fc8e19489.json"
 def test_getcandata_check_urls():
-	cache = TuCache(_dir="pytest-web-cache")
-	cache.tdelta_end = datetime(2021,11,15,10,0,0,0)
+	cache = TuCache(webcache_dir="pytest-web-cache",tdelta_end=datetime(2021,11,15,10,0,0,0))
 	cache.cache = CacheForTests()
 	_it,_l = cache.get_candata("3331359",tdelta=100)
 	assert _l == 4
