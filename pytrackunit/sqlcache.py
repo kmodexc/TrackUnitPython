@@ -312,29 +312,34 @@ def sql_item_to_history_item(obj : Tuple) -> dict:
 
 async def SqlInsertIter(
         sqliter : TuIter,
-        db_path : str,
         start_ts_ms : int,
         end_ts_ms : int,
-        verbose : bool,
         **kwargs) -> Tuple[list,dict]:
     """Generator which inserts data from an upstream iterator into the database"""
+
+    db_path = kwargs['db_path']
+    verbose = kwargs['verbose']
+    timeout = kwargs['timeout']
+    table = kwargs['table']
+    veh_id = kwargs['id']
+
     assert db_path is not None
     assert db_path != ""
 
-    async with aiosqlite.connect(db_path) as _db:
+    async with aiosqlite.connect(db_path,timeout=timeout) as _db:
 
         if verbose:
             print("SqlInsertIter __init__ has sqliter:",sqliter)
-        if kwargs['table'] == "error":
+        if table == "error":
             insert_sql = "INSERT INTO error VALUES (?,?,?,?,?,?,?)"
             fconv = error_item_to_sql_item
-        elif kwargs['table'] == "history":
+        elif table == "history":
             insert_sql = """
             INSERT INTO history VALUES 
             (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """
             fconv = history_item_to_sql_item
-        elif kwargs['table'] == "candata":
+        elif table == "candata":
             insert_sql = """
             INSERT INTO candata VALUES 
             (?,?,?,?,?,?)
@@ -343,8 +348,8 @@ async def SqlInsertIter(
         else:
             raise Exception("Not yet implemented")
 
-        await _db.execute(f"INSERT INTO {kwargs['table']}meta VALUES (?,?,?,?)",\
-            (kwargs['id'],start_ts_ms,end_ts_ms,False))
+        await _db.execute(f"INSERT INTO {table}meta VALUES (?,?,?,?)",\
+            (veh_id,start_ts_ms,end_ts_ms,False),)
 
         await _db.commit()
 
@@ -370,8 +375,8 @@ async def SqlInsertIter(
             yield data, meta
 
         await _db.execute(f"""
-            UPDATE {kwargs['table']}meta SET isloaded=? WHERE unit=? AND start=? AND end=?
-            """,(True,kwargs['id'],start_ts_ms,end_ts_ms))
+            UPDATE {table}meta SET isloaded=? WHERE unit=? AND start=? AND end=?
+            """,(True,veh_id,start_ts_ms,end_ts_ms))
 
         await _db.commit()
 
@@ -379,24 +384,29 @@ async def SqlInsertIter(
             print("Loaded",start_ts_ms,end_ts_ms,kwargs)
 
 async def SqlReturnIter(
-        db_path : str,
         start_ts_ms : int,
         end_ts_ms : int,
-        verbose : bool,
         **kwargs) -> Tuple[list, dict]:
     """Generator return given data from database"""
+
+    db_path = kwargs['db_path']
+    verbose = kwargs['verbose']
+    timeout = kwargs['timeout']
+    table = kwargs['table']
+    veh_id = kwargs['id']
+
     command = f"""
-        select * from {kwargs['table']} where unit = ? and time >= ? and time <= ? order by time
+        select * from {table} where unit = ? and time >= ? and time <= ? order by time
     """
-    if kwargs['table'] == "error":
+    if table == "error":
         fconv = sql_item_to_error_item
-    elif kwargs['table'] == "history":
+    elif table == "history":
         fconv = sql_item_to_history_item
-    elif kwargs['table'] == "candata":
+    elif table == "candata":
         fconv = sql_item_to_candata_item
     else:
         raise Exception("Table not implemented yet")
-    async with aiosqlite.connect(db_path) as _db:
+    async with aiosqlite.connect(db_path,timeout=timeout) as _db:
 
         # Wait until the block is fully loaded
 
@@ -404,8 +414,8 @@ async def SqlReturnIter(
         isloaded = False
         while not isloaded:
             async with _db.execute(f"""
-                select * from {kwargs['table']}meta where unit = ? and start <= ? and end >= ?
-                """,(kwargs['id'],start_ts_ms,end_ts_ms)) as cur:
+                select * from {table}meta where unit = ? and start <= ? and end >= ?
+                """,(veh_id,start_ts_ms,end_ts_ms)) as cur:
                 first = await cur.fetchone()
                 if verbose:
                     print(first)
@@ -415,7 +425,7 @@ async def SqlReturnIter(
                     raise Exception(f"Timout waiting for block {start_ts_ms} {end_ts_ms} {kwargs}")
                 await asyncio.sleep(0)
 
-        async with _db.execute(command,(kwargs['id'],start_ts_ms, end_ts_ms)) as _cur:
+        async with _db.execute(command,(veh_id,start_ts_ms, end_ts_ms)) as _cur:
             async for x in _cur:
                 yield [fconv(x)], kwargs
 
@@ -430,14 +440,18 @@ class SqlCache:
         self.cache1 = kwargs.get('sql_cache1',TuCache(**cache1_kwargs))
         self.cache2 = kwargs.get('sql_cache2',TuCache(**kwargs))
         self.db_connection = None
+        self.timeout = kwargs.get('sql_timeout',30)
         self.connect()
+        if kwargs.get('sql_repair_on_start',True):
+            for table in ['error','history','candata']:
+                self.repair(table)
 
     def connect(self) -> None:
         """Connects the SqlCache and sets up db_connection"""
         if self.db_connection is not None:
             raise Exception("Cant connect twice")
         no_db_present = not os.path.isfile(self.db_path)
-        self.db_connection = sqlite3.connect(self.db_path)
+        self.db_connection = sqlite3.connect(self.db_path,timeout=self.timeout)
         if no_db_present:
             create_tables(self.db_path)
 
@@ -460,6 +474,26 @@ class SqlCache:
         if remove_data:
             os.remove(self.db_path)
         self.connect()
+
+    def repair(self,table : str) -> None:
+        """
+        repairs the database after crash.
+        deletes blocks with unloaded data
+        """
+        cur = self.db_connection.execute(f"""
+            select * from {table}meta where
+            isloaded = 0
+            """)
+        for veh_id, start_ts_ms, end_ts_ms, _ in cur:
+            self.db_connection.execute(f"""
+                DELETE FROM {table} WHERE
+                unit=? AND time>=? AND time<=?
+                """,(veh_id,start_ts_ms,end_ts_ms))
+            self.db_connection.execute(f"""
+                DELETE FROM {table}meta WHERE
+                unit=? AND start=? AND end=?
+                """,(veh_id,start_ts_ms,end_ts_ms))
+            self.db_connection.commit()
 
     async def get_unitlist(self):
         """returns a list of vehicles"""
@@ -491,10 +525,11 @@ class SqlCache:
 
         wrap_iter = SqlInsertIter(
             int_data_iter,
-            self.db_path,
             start_ts_ms,
             end_ts_ms,
-            self.verbose,
+            db_path=self.db_path,
+            verbose=self.verbose,
+            timeout=self.timeout,
             **kwargs)
 
         if previter is None:
@@ -527,7 +562,13 @@ class SqlCache:
             previter = TuIter()
 
         if cnt > 0:
-            previter.add(SqlReturnIter(self.db_path,start_ts_ms,end_ts_ms,self.verbose,**kwargs))
+            previter.add(SqlReturnIter(
+                start_ts_ms,
+                end_ts_ms,
+                db_path=self.db_path,
+                verbose=self.verbose,
+                timeout=self.timeout,
+                **kwargs))
         elif self.verbose:
             print("could not find any item in block ",start_ts_ms,end_ts_ms,"for unit",kwargs['id'])
 

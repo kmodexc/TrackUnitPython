@@ -281,7 +281,13 @@ async def test_sqlinsertiter():
 
     cache = CacheForTests()
     create_tables(db_path)
-    it = SqlInsertIter(db_path=db_path,sqliter=cache.ret_val_generator(0,MID),verbose=True,table="error",**cache.testmeta)
+    it = SqlInsertIter(
+        db_path=db_path,
+        sqliter=cache.ret_val_generator(0,MID),
+        verbose=True,
+        table="error",
+        timeout=1,
+        **cache.testmeta)
     async for x in it:
         print(x)
 
@@ -297,7 +303,13 @@ async def test_sqlinsertiter_isloaded():
 
     cache = CacheForTests()
     create_tables(db_path)
-    it = SqlInsertIter(db_path=db_path,sqliter=cache.ret_val_generator(0,MID),verbose=True,table="error",**cache.testmeta)
+    it = SqlInsertIter(
+        db_path=db_path,
+        sqliter=cache.ret_val_generator(0,MID),
+        verbose=True,
+        table="error",
+        timeout=1,
+        **cache.testmeta)
     async for x in it:
         print(x)
 
@@ -319,12 +331,24 @@ async def test_sqlinsertiter_integrity_error():
 
     cache = CacheForTests()
     create_tables(db_path)
-    it = SqlInsertIter(db_path=db_path,sqliter=cache.ret_val_generator(0,MID),verbose=True,table="error",**cache.testmeta)
+    it = SqlInsertIter(
+        db_path=db_path,
+        sqliter=cache.ret_val_generator(0,MID),
+        verbose=True,
+        table="error",
+        timeout=1,
+        **cache.testmeta)
     async for x in it:
         print(x)
 
     with pytest.raises(sqlite3.IntegrityError) as exc:
-        it = SqlInsertIter(db_path=db_path,sqliter=cache.ret_val_generator(0,MID),verbose=True,table="error",**cache.testmeta)
+        it = SqlInsertIter(
+            db_path=db_path,
+            sqliter=cache.ret_val_generator(0,MID),
+            verbose=True,
+            table="error",
+            timeout=1,
+            **cache.testmeta)
         async for x in it:
             print(x)
 
@@ -335,7 +359,13 @@ async def test_sqlinsertiter_integrity_error():
     cur = db.execute("select count(*) from error")
     assert 0 == cur.fetchone()[0]
     
-    it = SqlInsertIter(db_path=db_path,sqliter=cache.ret_val_generator(0,MID),verbose=True,table="error",**cache.testmeta)
+    it = SqlInsertIter(
+        db_path=db_path,
+        sqliter=cache.ret_val_generator(0,MID),
+        verbose=True,
+        table="error",
+        timeout=1,
+        **cache.testmeta)
     async for x in it:
         print(x)
 
