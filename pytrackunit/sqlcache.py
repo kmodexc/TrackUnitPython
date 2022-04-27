@@ -1,5 +1,6 @@
 """Module for caching data in sql db"""
 
+from typing import Tuple
 import asyncio
 from copy import deepcopy
 import os.path
@@ -134,7 +135,7 @@ def create_tables(db_path : str) -> None:
     _db.commit()
     _db.close()
 
-def candata_item_to_sql_item(_x : dict,meta : dict) -> tuple:
+def candata_item_to_sql_item(_x : dict,meta : dict) -> Tuple:
     """
     returns the candata as a tuple and converts the time to unix timestamp (milliseconds)
     """
@@ -149,7 +150,7 @@ def candata_item_to_sql_item(_x : dict,meta : dict) -> tuple:
         _uom = None
     return (_id,_time,_variableid,_name,_value,_uom)
 
-def sql_item_to_candata_item(obj : tuple) -> dict:
+def sql_item_to_candata_item(obj : Tuple) -> dict:
     """
     the operation candata_item_to_sql_item reversed
     """
@@ -162,7 +163,7 @@ def sql_item_to_candata_item(obj : tuple) -> dict:
     _x['uoM'] = obj[5]
     return _x
 
-def error_item_to_sql_item(_x : dict,meta : dict) -> tuple:
+def error_item_to_sql_item(_x : dict,meta : dict) -> Tuple:
     """
     returns the error as a tuple and converts the time to unix timestamp (milliseconds)
     """
@@ -183,7 +184,7 @@ def error_item_to_sql_item(_x : dict,meta : dict) -> tuple:
         _desc = None
     return (_id,_time,_spn,_fmi,_oc,_name,_desc)
 
-def sql_item_to_error_item(obj : tuple) -> dict:
+def sql_item_to_error_item(obj : Tuple) -> dict:
     """
     the operation error_item_to_sql_item reversed
     """
@@ -198,7 +199,7 @@ def sql_item_to_error_item(obj : tuple) -> dict:
     return _x
 
 # pylint: disable=invalid-name, too-many-locals
-def history_item_to_sql_item(_x : dict, meta : dict) -> tuple:
+def history_item_to_sql_item(_x : dict, meta : dict) -> Tuple:
     """
     returns the history as a tuple and converts the time to unix timestamp (milliseconds)
     """
@@ -258,7 +259,7 @@ def history_item_to_sql_item(_x : dict, meta : dict) -> tuple:
         _batteryLevel, _externalPower)
 # pylinte: enable=invalid-name, too-many-locals
 
-def sql_item_to_history_item(obj : tuple) -> dict:
+def sql_item_to_history_item(obj : Tuple) -> dict:
     """
     the operation history_item_to_sql_item reversed
     """
@@ -315,7 +316,7 @@ async def SqlInsertIter(
         start_ts_ms : int,
         end_ts_ms : int,
         verbose : bool,
-        **kwargs) -> tuple[list,dict]:
+        **kwargs) -> Tuple[list,dict]:
     """Generator which inserts data from an upstream iterator into the database"""
     assert db_path is not None
     assert db_path != ""
@@ -382,7 +383,7 @@ async def SqlReturnIter(
         start_ts_ms : int,
         end_ts_ms : int,
         verbose : bool,
-        **kwargs) -> tuple[list, dict]:
+        **kwargs) -> Tuple[list, dict]:
     """Generator return given data from database"""
     command = f"""
         select * from {kwargs['table']} where unit = ? and time >= ? and time <= ? order by time
@@ -469,7 +470,7 @@ class SqlCache:
             start_ts_ms : int,
             end_ts_ms : int,
             previter : TuIter,
-            **kwargs) -> tuple[TuIter,int]:
+            **kwargs) -> Tuple[TuIter,int]:
         """
         gets errors from upstream cache
         """
@@ -506,7 +507,7 @@ class SqlCache:
         start_ts_ms : int,
         end_ts_ms : int,
         previter : TuIter,
-        **kwargs) -> tuple[TuIter,int]:
+        **kwargs) -> Tuple[TuIter,int]:
         """
         gets data of this period from db whether or not it was actually stored there
         start_ts_ms and end_ts_ms are unix timestamps in milliseconds so the milliseconds since 1970
@@ -535,7 +536,7 @@ class SqlCache:
             start_ts_ms : int,
             end_ts_ms : int,
             previter : TuIter,
-            **kwargs) -> tuple[TuIter,int]:
+            **kwargs) -> Tuple[TuIter,int]:
         """
         returns error in between the given datetime objects
         start_ts_ms and end_ts_ms are unix timestamps in milliseconds so the milliseconds since 1970
@@ -582,7 +583,7 @@ class SqlCache:
         previter, cnt3 = self.get_general_unixts(me_end+1,end_ts_ms,previter,**kwargs)
         return previter,(cnt1+cnt2+cnt3)
 
-    def get_general(self,previter : TuIter,**kwargs) -> tuple[TuIter,int]:
+    def get_general(self,previter : TuIter,**kwargs) -> Tuple[TuIter,int]:
         """returns data specified by kwargs"""
         start_ts_ms = int(kwargs['start'].timestamp()*1000)
         end_ts_ms = int(kwargs['end'].timestamp()*1000)
@@ -592,7 +593,7 @@ class SqlCache:
             veh_id : str,
             start : datetime,
             end : datetime,
-            previter : TuIter=None) -> tuple[TuIter,int]:
+            previter : TuIter=None) -> Tuple[TuIter,int]:
         """returns error in between the given datetime objects"""
         meta = {}
         meta['start'] = start
@@ -600,7 +601,7 @@ class SqlCache:
         meta['table'] = 'error'
         meta['id'] = veh_id
         return self.get_general(previter,**meta)
-    def get_faults(self,veh_id : str,tdelta=None,previter : TuIter=None) -> tuple[TuIter,int]:
+    def get_faults(self,veh_id : str,tdelta=None,previter : TuIter=None) -> Tuple[TuIter,int]:
         """get_faults method"""
         start, end = start_end_from_tdelta(tdelta,self.tdelta_end)
         return self.get_faults_timedelta(veh_id,start,end,previter)
@@ -608,7 +609,7 @@ class SqlCache:
             veh_id : str,
             start : datetime,
             end : datetime,
-            previter : TuIter=None) -> tuple[TuIter,int]:
+            previter : TuIter=None) -> Tuple[TuIter,int]:
         """returns error in between the given datetime objects"""
         meta = {}
         meta['start'] = start
@@ -616,7 +617,7 @@ class SqlCache:
         meta['table'] = 'history'
         meta['id'] = veh_id
         return self.get_general(previter,**meta)
-    def get_history(self,veh_id : str,tdelta=None,previter : TuIter=None) -> tuple[TuIter,int]:
+    def get_history(self,veh_id : str,tdelta=None,previter : TuIter=None) -> Tuple[TuIter,int]:
         """get_faults method"""
         start, end = start_end_from_tdelta(tdelta,self.tdelta_end)
         return self.get_history_timedelta(veh_id,start,end,previter)
@@ -624,7 +625,7 @@ class SqlCache:
             veh_id : str,
             start : datetime,
             end : datetime,
-            previter : TuIter=None) -> tuple[TuIter,int]:
+            previter : TuIter=None) -> Tuple[TuIter,int]:
         """returns error in between the given datetime objects"""
         meta = {}
         meta['start'] = start
@@ -632,7 +633,7 @@ class SqlCache:
         meta['table'] = 'candata'
         meta['id'] = veh_id
         return self.get_general(previter,**meta)
-    def get_candata(self,veh_id : str,tdelta=None,previter : TuIter=None) -> tuple[TuIter,int]:
+    def get_candata(self,veh_id : str,tdelta=None,previter : TuIter=None) -> Tuple[TuIter,int]:
         """get_faults method"""
         start, end = start_end_from_tdelta(tdelta,self.tdelta_end)
         return self.get_candata_timedelta(veh_id,start,end,previter)
