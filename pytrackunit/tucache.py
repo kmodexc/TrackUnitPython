@@ -12,19 +12,23 @@ class TuCache:
     """tucache class"""
     def __init__(self,**kwargs):
         self.cache = WebCache(**kwargs)
-        self.req_period = 30
-        self.tdelta_end = kwargs.get("tdelta_end",None)
+        self.settings = kwargs
+        self.settings.setdefault('req_period',30)
+        self.settings.setdefault('tdelta_end',None)
+        self.settings.setdefault('return_only_cache_files',False)
+        self.settings.setdefault('dont_return_data',False)
+        self.settings.setdefault('dont_read_files',False)
     def clean(self):
         """deletes all cached data"""
         self.cache.clean()
     async def get_url(self,url):
         """takes the data from cache if possible. otherwise data is loaded from web"""
         data = await self.cache.get(URL_BASE+url)
-        if self.cache.return_only_cache_files:
+        if self.settings['return_only_cache_files']:
             return [data]
-        if self.cache.dont_return_data:
+        if self.settings['dont_return_data']:
             return []
-        if self.cache.dont_read_files and len(data) == 0:
+        if self.settings['dont_read_files'] and len(data) == 0:
             return []
         return data.get('list')
     async def get_unitlist(self):
@@ -33,7 +37,7 @@ class TuCache:
     def general_daydiff_get(self,furl,meta,previter=None):
         """returns data for timedependant requests for a given daydelta"""
         tdelta = meta["tdelta"]
-        start,end = start_end_from_tdelta(tdelta,self.tdelta_end)
+        start,end = start_end_from_tdelta(tdelta,self.settings['tdelta_end'])
         meta["start"] = start
         meta["end"] = end
         return self.general_time_range_get(furl,meta,previter)
@@ -42,10 +46,11 @@ class TuCache:
         start = meta["start"]
         end = meta["end"]
         days = (end-start).days
+        req_period = self.settings['req_period']
         requests = []
-        for week in range(ceil(days/self.req_period)):
-            wstart = start+timedelta(days=week*self.req_period)
-            wend = wstart+timedelta(days=min(self.req_period,(end-wstart).days))
+        for week in range(ceil(days/req_period)):
+            wstart = start+timedelta(days=week*req_period)
+            wend = wstart+timedelta(days=min(req_period,(end-wstart).days))
             requests.append(furl(\
                 wstart.strftime("%Y-%m-%dT%H:%M:%S"),\
                 wend.strftime("%Y-%m-%dT%H:%M:%S")))
