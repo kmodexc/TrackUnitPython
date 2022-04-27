@@ -76,6 +76,8 @@ class CacheForTests:
         self.testmeta["id"] = VEH
         self.testmeta["start_ts"] = START.timestamp()
         self.testmeta["end_ts"] = END.timestamp()
+        self.testmeta["start_ts_ms"] = self.testmeta["start_ts"] * 1000
+        self.testmeta["end_ts_ms"] = self.testmeta["end_ts"] * 1000
         self.modifiy_time = True
     def get_testobj(self, nr,time=None):
         obj = deepcopy(self.testobj)
@@ -279,7 +281,7 @@ async def test_sqlinsertiter():
 
     cache = CacheForTests()
     create_tables(db_path)
-    it = SqlInsertIter(db_path,"error",cache.ret_val_generator(0,MID),cache.testmeta,verbose=True)
+    it = SqlInsertIter(db_path=db_path,sqliter=cache.ret_val_generator(0,MID),verbose=True,table="error",**cache.testmeta)
     async for x in it:
         print(x)
 
@@ -287,8 +289,26 @@ async def test_sqlinsertiter():
         with db:
             cur = db.execute("select count(*) from error")
             assert 10 == cur.fetchone()[0]
-    
-    
+
+@pytest.mark.asyncio
+async def test_sqlinsertiter_isloaded():
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+
+    cache = CacheForTests()
+    create_tables(db_path)
+    it = SqlInsertIter(db_path=db_path,sqliter=cache.ret_val_generator(0,MID),verbose=True,table="error",**cache.testmeta)
+    async for x in it:
+        print(x)
+
+    with sqlite3.connect(db_path) as db:
+        with db:
+            cur = db.execute("select count(*) from error")
+            assert 10 == cur.fetchone()[0]
+            cur = db.execute("select count(*) from errormeta")
+            assert 1 == cur.fetchone()[0]
+            cur = db.execute("select isloaded from errormeta")
+            assert True == cur.fetchone()[0]
     
 @pytest.mark.asyncio
 async def test_sqlinsertiter_integrity_error():
@@ -299,12 +319,12 @@ async def test_sqlinsertiter_integrity_error():
 
     cache = CacheForTests()
     create_tables(db_path)
-    it = SqlInsertIter(db_path,"error",cache.ret_val_generator(0,MID),cache.testmeta,verbose=True)
+    it = SqlInsertIter(db_path=db_path,sqliter=cache.ret_val_generator(0,MID),verbose=True,table="error",**cache.testmeta)
     async for x in it:
         print(x)
 
     with pytest.raises(sqlite3.IntegrityError) as exc:
-        it = SqlInsertIter(db_path,"error",cache.ret_val_generator(0,MID),cache.testmeta,verbose=True)
+        it = SqlInsertIter(db_path=db_path,sqliter=cache.ret_val_generator(0,MID),verbose=True,table="error",**cache.testmeta)
         async for x in it:
             print(x)
 
@@ -315,7 +335,7 @@ async def test_sqlinsertiter_integrity_error():
     cur = db.execute("select count(*) from error")
     assert 0 == cur.fetchone()[0]
     
-    it = SqlInsertIter(db_path,"error",cache.ret_val_generator(0,MID),cache.testmeta,verbose=True)
+    it = SqlInsertIter(db_path=db_path,sqliter=cache.ret_val_generator(0,MID),verbose=True,table="error",**cache.testmeta)
     async for x in it:
         print(x)
 
@@ -373,7 +393,7 @@ def test_get_faults_twice():
 async def test_with_mock_same_block():
     if os.path.isfile(db_path):
         os.remove(db_path)
-    with SqlCache(auth=AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+    with SqlCache(db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
         it, cnt = cache.get_faults_timedelta(VEH,START,END)
         cnt = 0
         async for x,meta in it:
@@ -408,7 +428,7 @@ async def test_with_mock_same_block():
 async def test_with_mock_smaller_block():
     if os.path.isfile(db_path):
         os.remove(db_path)
-    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+    with SqlCache(db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
         cache.cache1.modifiy_time = False
         it, cnt = cache.get_faults_timedelta(VEH,START,END)
         cnt = 0
@@ -444,7 +464,7 @@ async def test_with_mock_smaller_block():
 async def test_with_mock_bigger_block():
     if os.path.isfile(db_path):
         os.remove(db_path)
-    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+    with SqlCache(db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
         it, cnt = cache.get_faults_timedelta(VEH,START,END)
         cnt = 0
         async for x,meta in it:
@@ -494,7 +514,7 @@ async def test_with_mock_bigger_block():
 async def test_with_mock_part_bigger_block_1():
     if os.path.isfile(db_path):
         os.remove(db_path)
-    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+    with SqlCache(db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
         it, cnt = cache.get_faults_timedelta(VEH,START,END)
         cnt = 0
         async for x,meta in it:
@@ -528,7 +548,7 @@ async def test_with_mock_part_bigger_block_1():
 async def test_with_mock_part_bigger_block_2():
     if os.path.isfile(db_path):
         os.remove(db_path)
-    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+    with SqlCache(db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
         it, cnt = cache.get_faults_timedelta(VEH,START,END)
         cnt = 0
         async for x,meta in it:
@@ -562,7 +582,7 @@ async def test_with_mock_part_bigger_block_2():
 async def test_with_mock_overlapping_1():
     if os.path.isfile(db_path):
         os.remove(db_path)
-    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+    with SqlCache(db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
         it, cnt = cache.get_faults_timedelta(VEH,START,END)
         cnt = 0
         async for x,meta in it:
@@ -596,7 +616,7 @@ async def test_with_mock_overlapping_1():
 async def test_with_mock_overlapping_2():
     if os.path.isfile(db_path):
         os.remove(db_path)
-    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+    with SqlCache(db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
         it, cnt = cache.get_faults_timedelta(VEH,START,END)
         cnt = 0
         async for x,meta in it:
@@ -631,7 +651,7 @@ async def test_with_mock_overlapping_2():
 async def test_get_faults_tdelta_timedelta():
     if os.path.isfile(db_path):
         os.remove(db_path)
-    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+    with SqlCache(db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
         cache.tdelta_end = END
         start,end = start_end_from_tdelta(END-START,END)
         it, cnt = cache.get_faults(VEH,END-START)
@@ -670,7 +690,7 @@ async def test_get_faults_tdelta_timedelta():
 async def test_get_faults_tdelta_int_days():
     if os.path.isfile(db_path):
         os.remove(db_path)
-    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+    with SqlCache(db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
         cache.tdelta_end = END
         start,end = start_end_from_tdelta(30,END)
         it, cnt = cache.get_faults(VEH,30)
@@ -710,7 +730,7 @@ async def test_get_faults_tdelta_int_days():
 async def test_get_history_tdelta_timedelta():
     if os.path.isfile(db_path):
         os.remove(db_path)
-    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+    with SqlCache(db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
         cache.tdelta_end = END
         start,end = start_end_from_tdelta(END-START,END)
         it, cnt = cache.get_history(VEH,END-START)
@@ -749,7 +769,7 @@ async def test_get_history_tdelta_timedelta():
 async def test_get_history_tdelta_int_days():
     if os.path.isfile(db_path):
         os.remove(db_path)
-    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+    with SqlCache(db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
         cache.tdelta_end = END
         start,end = start_end_from_tdelta(30,END)
         it, cnt = cache.get_history(VEH,30)
@@ -793,7 +813,7 @@ async def test_get_history_tdelta_int_days():
 async def test_get_candata_tdelta_timedelta():
     if os.path.isfile(db_path):
         os.remove(db_path)
-    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+    with SqlCache(db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
         cache.tdelta_end = END
         start,end = start_end_from_tdelta(END-START,END)
         it, cnt = cache.get_candata(VEH,END-START)
@@ -833,7 +853,7 @@ async def test_get_candata_tdelta_timedelta():
 async def test_get_candata_tdelta_int_days():
     if os.path.isfile(db_path):
         os.remove(db_path)
-    with SqlCache(auth = AUTH,_dir=None,db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
+    with SqlCache(db_path=db_path,sql_cache1=CacheForTests(),verbose=True) as cache:
         cache.tdelta_end = END
         start,end = start_end_from_tdelta(30,END)
         it, cnt = cache.get_candata(VEH,30)

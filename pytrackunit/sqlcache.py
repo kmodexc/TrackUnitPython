@@ -1,10 +1,12 @@
 """Module for caching data in sql db"""
 
+import asyncio
 from copy import deepcopy
 import os.path
 import os
 from datetime import datetime
 import sqlite3
+import time
 import aiosqlite
 from .tucache import TuCache
 from .tuiter import TuIter
@@ -16,6 +18,7 @@ create table historymeta(
     unit text, 
     start text, 
     end text,
+    isloaded bool,
     CONSTRAINT time CHECK (start < end),
     primary key(unit, start)
 )
@@ -76,6 +79,7 @@ CREATE TABLE errormeta(
     unit text, 
     start int, 
     end int,
+    isloaded bool,
     CONSTRAINT time CHECK (start < end),
     primary key(unit, start)
 )
@@ -99,6 +103,7 @@ CREATE TABLE candatameta(
     unit text, 
     start int, 
     end int,
+    isloaded bool,
     CONSTRAINT time CHECK (start < end),
     primary key(unit, start)
 )
@@ -116,7 +121,7 @@ CREATE TABLE candata(
 )
 '''
 
-def create_tables(db_path):
+def create_tables(db_path : str) -> None:
     """Creates the necessary tables in an sqlite database which is located at db_path"""
     _db = sqlite3.connect(db_path)
     cur = _db.cursor()
@@ -129,7 +134,7 @@ def create_tables(db_path):
     _db.commit()
     _db.close()
 
-def candata_item_to_sql_item(_x,meta):
+def candata_item_to_sql_item(_x : dict,meta : dict) -> tuple:
     """
     returns the candata as a tuple and converts the time to unix timestamp (milliseconds)
     """
@@ -144,7 +149,7 @@ def candata_item_to_sql_item(_x,meta):
         _uom = None
     return (_id,_time,_variableid,_name,_value,_uom)
 
-def sql_item_to_candata_item(obj):
+def sql_item_to_candata_item(obj : tuple) -> dict:
     """
     the operation candata_item_to_sql_item reversed
     """
@@ -157,7 +162,7 @@ def sql_item_to_candata_item(obj):
     _x['uoM'] = obj[5]
     return _x
 
-def error_item_to_sql_item(_x,meta):
+def error_item_to_sql_item(_x : dict,meta : dict) -> tuple:
     """
     returns the error as a tuple and converts the time to unix timestamp (milliseconds)
     """
@@ -178,7 +183,7 @@ def error_item_to_sql_item(_x,meta):
         _desc = None
     return (_id,_time,_spn,_fmi,_oc,_name,_desc)
 
-def sql_item_to_error_item(obj):
+def sql_item_to_error_item(obj : tuple) -> dict:
     """
     the operation error_item_to_sql_item reversed
     """
@@ -193,7 +198,7 @@ def sql_item_to_error_item(obj):
     return _x
 
 # pylint: disable=invalid-name, too-many-locals
-def history_item_to_sql_item(_x,meta):
+def history_item_to_sql_item(_x : dict, meta : dict) -> tuple:
     """
     returns the history as a tuple and converts the time to unix timestamp (milliseconds)
     """
@@ -253,7 +258,7 @@ def history_item_to_sql_item(_x,meta):
         _batteryLevel, _externalPower)
 # pylinte: enable=invalid-name, too-many-locals
 
-def sql_item_to_history_item(obj):
+def sql_item_to_history_item(obj : tuple) -> dict:
     """
     the operation history_item_to_sql_item reversed
     """
@@ -304,25 +309,31 @@ def sql_item_to_history_item(obj):
     _x['externalPower'] = obj[43]
     return _x
 
-async def SqlInsertIter(dbpath, table, sqliter, meta, verbose=False):
+async def SqlInsertIter(
+        sqliter : TuIter,
+        db_path : str,
+        start_ts_ms : int,
+        end_ts_ms : int,
+        verbose : bool,
+        **kwargs) -> tuple[list,dict]:
     """Generator which inserts data from an upstream iterator into the database"""
-    assert dbpath is not None
-    assert dbpath != ""
+    assert db_path is not None
+    assert db_path != ""
 
-    async with aiosqlite.connect(dbpath) as _db:
+    async with aiosqlite.connect(db_path) as _db:
 
         if verbose:
             print("SqlInsertIter __init__ has sqliter:",sqliter)
-        if table == "error":
+        if kwargs['table'] == "error":
             insert_sql = "INSERT INTO error VALUES (?,?,?,?,?,?,?)"
             fconv = error_item_to_sql_item
-        elif table == "history":
+        elif kwargs['table'] == "history":
             insert_sql = """
             INSERT INTO history VALUES 
             (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """
             fconv = history_item_to_sql_item
-        elif table == "candata":
+        elif kwargs['table'] == "candata":
             insert_sql = """
             INSERT INTO candata VALUES 
             (?,?,?,?,?,?)
@@ -331,8 +342,10 @@ async def SqlInsertIter(dbpath, table, sqliter, meta, verbose=False):
         else:
             raise Exception("Not yet implemented")
 
-        await _db.execute(f"INSERT INTO {table}meta VALUES (?,?,?)",\
-            (meta['id'],meta['start_ts'],meta['end_ts']))
+        await _db.execute(f"INSERT INTO {kwargs['table']}meta VALUES (?,?,?,?)",\
+            (kwargs['id'],start_ts_ms,end_ts_ms,False))
+
+        await _db.commit()
 
         async for data,meta in sqliter:
             data = list(data)
@@ -340,9 +353,10 @@ async def SqlInsertIter(dbpath, table, sqliter, meta, verbose=False):
 
             try:
                 await _db.executemany(insert_sql,sqldata)
+                await _db.commit()
             except sqlite3.IntegrityError as exc1:
                 if verbose:
-                    print("Integrety error with",meta)
+                    print("Integrety error with",kwargs)
                     print("Try to find double entry (insert side)")
                     for in_item in sqldata:
                         try:
@@ -354,27 +368,55 @@ async def SqlInsertIter(dbpath, table, sqliter, meta, verbose=False):
 
             yield data, meta
 
+        await _db.execute(f"""
+            UPDATE {kwargs['table']}meta SET isloaded=? WHERE unit=? AND start=? AND end=?
+            """,(True,kwargs['id'],start_ts_ms,end_ts_ms))
+
+        await _db.commit()
+
         if verbose:
-            await _db.commit()
-            print("Committed")
+            print("Loaded",start_ts_ms,end_ts_ms,kwargs)
 
-
-
-async def SqlReturnIter(db_path, table, meta):
+async def SqlReturnIter(
+        db_path : str,
+        start_ts_ms : int,
+        end_ts_ms : int,
+        verbose : bool,
+        **kwargs) -> tuple[list, dict]:
     """Generator return given data from database"""
-    command = f"select * from {table} where unit = ? and time >= ? and time <= ? order by time"
-    if table == "error":
+    command = f"""
+        select * from {kwargs['table']} where unit = ? and time >= ? and time <= ? order by time
+    """
+    if kwargs['table'] == "error":
         fconv = sql_item_to_error_item
-    elif table == "history":
+    elif kwargs['table'] == "history":
         fconv = sql_item_to_history_item
-    elif table == "candata":
+    elif kwargs['table'] == "candata":
         fconv = sql_item_to_candata_item
     else:
         raise Exception("Table not implemented yet")
     async with aiosqlite.connect(db_path) as _db:
-        async with _db.execute(command,(meta['id'],meta['start_ts'],meta['end_ts'])) as _cur:
+
+        # Wait until the block is fully loaded
+
+        start_time = time.time()
+        isloaded = False
+        while not isloaded:
+            async with _db.execute(f"""
+                select * from {kwargs['table']}meta where unit = ? and start <= ? and end >= ?
+                """,(kwargs['id'],start_ts_ms,end_ts_ms)) as cur:
+                first = await cur.fetchone()
+                if verbose:
+                    print(first)
+                isloaded = first[3]
+            if not isloaded:
+                if time.time() - start_time > 1:
+                    raise Exception(f"Timout waiting for block {start_ts_ms} {end_ts_ms} {kwargs}")
+                await asyncio.sleep(0)
+
+        async with _db.execute(command,(kwargs['id'],start_ts_ms, end_ts_ms)) as _cur:
             async for x in _cur:
-                yield [fconv(x)], meta
+                yield [fconv(x)], kwargs
 
 class SqlCache:
     """Sql cache can cache trackunit data in Sqlite DB"""
@@ -389,7 +431,7 @@ class SqlCache:
         self.db_connection = None
         self.connect()
 
-    def connect(self):
+    def connect(self) -> None:
         """Connects the SqlCache and sets up db_connection"""
         if self.db_connection is not None:
             raise Exception("Cant connect twice")
@@ -398,7 +440,7 @@ class SqlCache:
         if no_db_present:
             create_tables(self.db_path)
 
-    def close(self):
+    def close(self) -> None:
         """closes database connection"""
         if self.db_connection is None:
             return
@@ -411,7 +453,7 @@ class SqlCache:
     def __exit__(self, _type, value, traceback):
         self.close()
 
-    def reset(self,remove_data=False):
+    def reset(self,remove_data : bool=False) -> None:
         """removes database file"""
         self.close()
         if remove_data:
@@ -422,30 +464,37 @@ class SqlCache:
         """returns a list of vehicles"""
         return await self.cache2.get_unitlist()
 
-    # pylint: disable=too-many-arguments
-    def get_general_upstream(self, table, veh_id, start_ts, end_ts, previter=None):
-        """gets errors from upstream cache"""
+    def get_general_upstream(
+            self,
+            start_ts_ms : int,
+            end_ts_ms : int,
+            previter : TuIter,
+            **kwargs) -> tuple[TuIter,int]:
+        """
+        gets errors from upstream cache
+        """
 
-        start = datetime.fromtimestamp(start_ts/1000.0)
-        end = datetime.fromtimestamp(end_ts/1000.0)
-
-        if table == "error":
-            int_data_iter, _len = self.cache1.get_faults_timedelta(veh_id,start,end,None)
-        elif table == "history":
-            int_data_iter, _len = self.cache1.get_history_timedelta(veh_id,start,end,None)
-        elif table == "candata":
-            int_data_iter, _len = self.cache1.get_candata_timedelta(veh_id,start,end,None)
+        if kwargs['table'] == "error":
+            f_get_timedelta = self.cache1.get_faults_timedelta
+        elif kwargs['table'] == "history":
+            f_get_timedelta = self.cache1.get_history_timedelta
+        elif kwargs['table'] == "candata":
+            f_get_timedelta = self.cache1.get_candata_timedelta
         else:
             raise Exception("Not Implemented")
 
-        meta = {}
-        meta["id"] = veh_id
-        meta["start_ts"] = start_ts
-        meta["end_ts"] = end_ts
-        meta["start"] = start
-        meta["end"] = end
+        start = datetime.fromtimestamp(start_ts_ms/1000)
+        end = datetime.fromtimestamp(end_ts_ms/1000)
 
-        wrap_iter = SqlInsertIter(self.db_path,table,int_data_iter,meta,self.verbose)
+        int_data_iter, _len = f_get_timedelta(kwargs['id'],start,end,None)
+
+        wrap_iter = SqlInsertIter(
+            int_data_iter,
+            self.db_path,
+            start_ts_ms,
+            end_ts_ms,
+            self.verbose,
+            **kwargs)
 
         if previter is None:
             previter = TuIter()
@@ -453,53 +502,62 @@ class SqlCache:
         previter.add(wrap_iter)
 
         return previter, _len
-    def get_general_sql(self, table, veh_id, start_ts, end_ts, previter=None):
-        """gets data of this period from db whether or not it was actually stored there"""
+    def get_general_sql(self,
+        start_ts_ms : int,
+        end_ts_ms : int,
+        previter : TuIter,
+        **kwargs) -> tuple[TuIter,int]:
+        """
+        gets data of this period from db whether or not it was actually stored there
+        start_ts_ms and end_ts_ms are unix timestamps in milliseconds so the milliseconds since 1970
+        """
 
         cur = self.db_connection.execute(f"""
-            select count(*) from {table} where
+            select count(*) from {kwargs['table']} where
             unit = ? and time >= ? and time <= ?
             order by time
-            """,(veh_id,start_ts,end_ts))
+            """,(kwargs['id'],start_ts_ms,end_ts_ms))
         cnt = cur.fetchone()[0]
 
         if self.verbose:
             print("found",cnt,"in sql")
 
-        meta = {}
-        meta["id"] = veh_id
-        meta["start_ts"] = start_ts
-        meta["end_ts"] = end_ts
-
         if previter is None:
             previter = TuIter()
 
         if cnt > 0:
-            previter.add(SqlReturnIter(self.db_path,table,meta))
+            previter.add(SqlReturnIter(self.db_path,start_ts_ms,end_ts_ms,self.verbose,**kwargs))
         elif self.verbose:
-            print("could not find any item in block ", start_ts, end_ts,"for unit",veh_id)
+            print("could not find any item in block ",start_ts_ms,end_ts_ms,"for unit",kwargs['id'])
 
         return previter, cnt
-    def get_general_unixts(self, table, veh_id, start_ts, end_ts, previter=None):
-        """returns error in between the given datetime objects"""
+    def get_general_unixts(self,
+            start_ts_ms : int,
+            end_ts_ms : int,
+            previter : TuIter,
+            **kwargs) -> tuple[TuIter,int]:
+        """
+        returns error in between the given datetime objects
+        start_ts_ms and end_ts_ms are unix timestamps in milliseconds so the milliseconds since 1970
+        """
 
         # Query meta database to check whether there the data is in database
         cur = self.db_connection.execute(f"""
-            select * from {table}meta where unit = ? and (
+            select * from {kwargs["table"]}meta where unit = ? and (
             (start <= ? and end > ?) or 
             (start < ? and end >= ?) or
             (start >= ? and end <= ?)
             ) order by start
-            """,(veh_id,start_ts,start_ts,end_ts,end_ts,start_ts,end_ts))
+            """,(kwargs['id'],start_ts_ms,start_ts_ms,end_ts_ms,end_ts_ms,start_ts_ms,end_ts_ms))
         first = cur.fetchone()
         if first is not None:
             me_vehid, me_start, me_end = first[0], first[1], first[2]
         else:
             if self.verbose:
                 print("Stop iteration. Didnt find",\
-                    veh_id,start_ts,end_ts,\
+                    kwargs['id'],start_ts_ms,end_ts_ms,\
                     "Get errors from upstream now")
-            return self.get_general_upstream(table,veh_id,start_ts,end_ts,previter)
+            return self.get_general_upstream(start_ts_ms,end_ts_ms,previter,**kwargs)
 
         me_start = int(float(me_start))
         me_end = int(float(me_end))
@@ -509,45 +567,72 @@ class SqlCache:
 
         # Depending on the start and end of the next block, apply divide and conquer
         # by recursive calls of this function.
-        if me_start <= start_ts:
-            if me_end < end_ts:
-                previter, cnt1 = self.get_general_unixts(table,veh_id,start_ts,me_end,previter)
-                previter, cnt2 = self.get_general_unixts(table,veh_id,me_end+1,end_ts,previter)
+        if me_start <= start_ts_ms:
+            if me_end < end_ts_ms:
+                previter, cnt1 = self.get_general_unixts(start_ts_ms,me_end,previter,**kwargs)
+                previter, cnt2 = self.get_general_unixts(me_end+1,end_ts_ms,previter,**kwargs)
                 return previter,(cnt1+cnt2)
-            return self.get_general_sql(table,veh_id,start_ts,end_ts,previter)
-        if me_end >= end_ts:
-            previter, cnt1 = self.get_general_unixts(table,veh_id,start_ts,me_start-1,previter)
-            previter, cnt2 = self.get_general_unixts(table,veh_id,me_start,end_ts,previter)
+            return self.get_general_sql(start_ts_ms,end_ts_ms,previter,**kwargs)
+        if me_end >= end_ts_ms:
+            previter, cnt1 = self.get_general_unixts(start_ts_ms,me_start-1,previter,**kwargs)
+            previter, cnt2 = self.get_general_unixts(me_start,end_ts_ms,previter,**kwargs)
             return previter,(cnt1+cnt2)
-        previter, cnt1 = self.get_general_unixts(table,veh_id,start_ts,me_start-1,previter)
-        previter, cnt2 = self.get_general_unixts(table,veh_id,me_start,me_end,previter)
-        previter, cnt3 = self.get_general_unixts(table,veh_id,me_end+1,end_ts,previter)
+        previter, cnt1 = self.get_general_unixts(start_ts_ms,me_start-1,previter,**kwargs)
+        previter, cnt2 = self.get_general_unixts(me_start,me_end,previter,**kwargs)
+        previter, cnt3 = self.get_general_unixts(me_end+1,end_ts_ms,previter,**kwargs)
         return previter,(cnt1+cnt2+cnt3)
-    # pylint: enable=too-many-arguments
-    def get_faults_timedelta(self,veh_id,start,end,previter=None):
+
+    def get_general(self,previter : TuIter,**kwargs) -> tuple[TuIter,int]:
+        """returns data specified by kwargs"""
+        start_ts_ms = int(kwargs['start'].timestamp()*1000)
+        end_ts_ms = int(kwargs['end'].timestamp()*1000)
+        return self.get_general_unixts(start_ts_ms,end_ts_ms,previter,**kwargs)
+
+    def get_faults_timedelta(self,
+            veh_id : str,
+            start : datetime,
+            end : datetime,
+            previter : TuIter=None) -> tuple[TuIter,int]:
         """returns error in between the given datetime objects"""
-        start_ts = int(start.timestamp()*1000)
-        end_ts = int(end.timestamp()*1000)
-        return self.get_general_unixts("error",veh_id, start_ts, end_ts, previter)
-    def get_faults(self,veh_id,tdelta=None,previter=None):
+        meta = {}
+        meta['start'] = start
+        meta['end'] = end
+        meta['table'] = 'error'
+        meta['id'] = veh_id
+        return self.get_general(previter,**meta)
+    def get_faults(self,veh_id : str,tdelta=None,previter : TuIter=None) -> tuple[TuIter,int]:
         """get_faults method"""
         start, end = start_end_from_tdelta(tdelta,self.tdelta_end)
         return self.get_faults_timedelta(veh_id,start,end,previter)
-    def get_history_timedelta(self,veh_id,start,end,previter=None):
+    def get_history_timedelta(self,
+            veh_id : str,
+            start : datetime,
+            end : datetime,
+            previter : TuIter=None) -> tuple[TuIter,int]:
         """returns error in between the given datetime objects"""
-        start_ts = int(start.timestamp()*1000)
-        end_ts = int(end.timestamp()*1000)
-        return self.get_general_unixts("history",veh_id, start_ts, end_ts, previter)
-    def get_history(self,veh_id,tdelta=None,previter=None):
+        meta = {}
+        meta['start'] = start
+        meta['end'] = end
+        meta['table'] = 'history'
+        meta['id'] = veh_id
+        return self.get_general(previter,**meta)
+    def get_history(self,veh_id : str,tdelta=None,previter : TuIter=None) -> tuple[TuIter,int]:
         """get_faults method"""
         start, end = start_end_from_tdelta(tdelta,self.tdelta_end)
         return self.get_history_timedelta(veh_id,start,end,previter)
-    def get_candata_timedelta(self,veh_id,start,end,previter=None):
+    def get_candata_timedelta(self,
+            veh_id : str,
+            start : datetime,
+            end : datetime,
+            previter : TuIter=None) -> tuple[TuIter,int]:
         """returns error in between the given datetime objects"""
-        start_ts = int(start.timestamp()*1000)
-        end_ts = int(end.timestamp()*1000)
-        return self.get_general_unixts("candata",veh_id, start_ts, end_ts, previter)
-    def get_candata(self,veh_id,tdelta=None,previter=None):
+        meta = {}
+        meta['start'] = start
+        meta['end'] = end
+        meta['table'] = 'candata'
+        meta['id'] = veh_id
+        return self.get_general(previter,**meta)
+    def get_candata(self,veh_id : str,tdelta=None,previter : TuIter=None) -> tuple[TuIter,int]:
         """get_faults method"""
         start, end = start_end_from_tdelta(tdelta,self.tdelta_end)
         return self.get_candata_timedelta(veh_id,start,end,previter)
