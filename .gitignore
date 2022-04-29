@@ -8,6 +8,7 @@ test.py
 *.db
 *.png
 test.sql
+config.json
 
 # --------------------------- General Python Template ----------------------------------------
 
