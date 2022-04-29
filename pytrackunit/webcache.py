@@ -102,11 +102,13 @@ class WebCache:
     async def get(self,url):
         """get method"""
 
-        if self.settings['dont_cache_data']:
-            data, _ = await self.get_from_web(url)
-            return data
-
         verbose = self.settings['verbose']
+
+        if self.settings['dont_cache_data']:
+            data, text = await self.get_from_web(url)
+            if verbose:
+                print(url,len(text),"W")
+            return data
 
         fname = md5(url.encode('utf-8')).hexdigest()+".json"
 
