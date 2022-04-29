@@ -4,37 +4,82 @@ import json
 import os.path
 import asyncio
 import tqdm
+from typing import Callable, Iterable
+import aioprocessing
+from pytrackunit.tuiter import TuIter
 from .tucache import TuCache
 from .sqlcache import SqlCache
 from .helper import SecureString
 
-def get_multi_general(func,idlist,tdelta,f_process=None,progress_bar=True):
+
+async def async_queue_generator(queue : aioprocessing.AioQueue):
+    """converts the queue into an generator"""
+    while True:
+        obj = await queue.coro_get()
+        if obj is None:
+            break
+        else:
+            yield obj
+
+def queue_generator(queue : aioprocessing.AioQueue):
+    """converts the queue into an generator"""
+    while True:
+        obj = queue.get()
+        if obj is None:
+            break
+        else:
+            yield obj
+
+async def async_collect_data(
+        queue : aioprocessing.AioQueue,
+        tuit : TuIter,
+        f_process : Callable[[Iterable[dict],dict],Iterable],
+        progress_bar : tqdm.tqdm=None) -> None:
     """
-    returns the data of a list of vehicles with the ids provided in idlist.
-    f_process can be specified to process slices of data. f_process returns a list
+    Collects the data from tuiter and puts it in a async queue.
+    If set it will call update of the progress_bar after each iteration.
     """
-    if f_process is None:
-        f_process = lambda x, meta: x
 
-    async def get_data_async(globit,globlen):
-        _cor = []
-        if progress_bar:
-            pbar = tqdm.tqdm(total=globlen)
-        async for _f, meta in globit:
-            _cor += f_process(_f, meta)
-            if progress_bar:
-                pbar.update()
-        return _cor
+    async for data_list, meta in tuit:
+        proc_data = f_process(data_list,meta)
+        for x in proc_data:
+            if x is not None:
+                await queue.coro_put(x)
+        if progress_bar is not None:
+            progress_bar.update()
 
-    globlen = 0
-    last = None
-    for _id in idlist:
-        last,_l = func(_id,tdelta,last)
-        globlen += _l
+async def async_provider_process(
+        settings : dict,
+        queue : aioprocessing.AioQueue, 
+        veh_id_list : Iterable[str],
+        tdelta : int,
+        str_function : str) -> None:
+    """
+    puts the data it gets from trackunit and puts it in the given queue
+    function can be "error" "history" "candata"
+    """
+    tu = TrackUnit(**settings)
 
-    data = asyncio.run(get_data_async(last,globlen))
+    if str_function == "history":
+        f_function = tu.cache.get_history
+    elif str_function == "candata":
+        f_function = tu.cache.get_candata
+    else:
+        f_function = tu.cache.get_faults
 
-    return data
+    await tu.async_get_multi_general_queue(queue,f_function,veh_id_list,tdelta)
+
+def provider_process(
+        settings : dict,
+        queue : aioprocessing.AioQueue, 
+        veh_id_list : Iterable[str],
+        tdelta : int,
+        str_function : str) -> None:
+    """
+    puts the data it gets from trackunit and puts it in the given queue
+    function can be "error" "history" "candata"
+    """
+    asyncio.run(async_provider_process(settings,queue,veh_id_list,tdelta,str_function))
 
 class TrackUnit:
     """TrackUnit class"""
@@ -62,7 +107,64 @@ class TrackUnit:
             self.cache = SqlCache(**kwargs)
         else:
             self.cache = TuCache(**kwargs)
-    async def _a_get_unitlist(self,_type=None,sort_by_hours=True):
+        self.settings = kwargs
+        self.settings.setdefault("use_progress_bar",True)
+        self.settings.setdefault("queue_size",1000)
+        self.settings.setdefault("use_async_generator",False)
+
+    async def async_get_multi_general_queue(
+            self,
+            queue : aioprocessing.AioQueue,
+            func : Callable,
+            idlist : Iterable[str],
+            tdelta : int,
+            f_process : Callable[[Iterable[dict],dict],Iterable]=None) -> None:
+        """
+        returns the data of a list of vehicles with the ids provided in idlist.
+        f_process can be specified to process slices of data. f_process returns a list
+        """
+
+        if f_process is None:
+            f_process = lambda x, meta: zip(x,[meta.get('id','no-id-found')])
+
+        iterators = []
+
+        globlen = 0
+        for _id in idlist:
+            _it,_l= func(_id,tdelta)
+            globlen += _l
+            iterators.append(_it)
+
+        if self.settings['use_progress_bar']:
+            pbar = tqdm.tqdm(total=globlen)
+
+        zipped_list = list(zip(len(iterators)*[queue],iterators,len(iterators)*[f_process],len(iterators)*[pbar]))
+        
+        tasks = list(map(lambda x: async_collect_data(*x),zipped_list))
+
+        await asyncio.gather(*tasks)
+
+        await queue.coro_put(None)
+
+    def get_multi_general(
+            self,
+            idlist : Iterable[str],
+            tdelta : int,
+            str_process : str,
+            use_async_generator : bool) -> Iterable:
+        """
+        returns the data of a list of vehicles with the ids provided in idlist.
+        f_process can be specified to process slices of data. f_process returns a list
+        """
+        queue = aioprocessing.AioQueue(self.settings['queue_size'])
+        p = aioprocessing.AioProcess(target=provider_process,args=(self.settings,queue,idlist,tdelta,str_process))
+        p.start()
+        if use_async_generator:
+            return async_queue_generator(queue)
+        else:
+            return queue_generator(queue)
+
+    async def async_get_unitlist(self,_type=None,sort_by_hours=True):
         """unitList method"""
         data = await self.cache.get_unitlist()
         if _type is not None:
@@ -75,9 +177,9 @@ class TrackUnit:
 
     def get_unitlist(self,_type=None,sort_by_hours=True):
         """unitList method"""
-        return asyncio.run(self._a_get_unitlist(_type,sort_by_hours))
+        return asyncio.run(self.async_get_unitlist(_type,sort_by_hours))
 
-    async def _a_get_history(self,veh_id,tdelta):
+    async def async_get_history(self,veh_id,tdelta):
         """async getHistory method"""
         data = []
         _it, _ = self.cache.get_history(veh_id,tdelta)
@@ -85,7 +187,7 @@ class TrackUnit:
             data += _d
         return data
 
-    async def _a_get_candata(self,veh_id,tdelta=None):
+    async def async_get_candata(self,veh_id,tdelta=None):
         """async getCanData method"""
         data = []
         _it, _ = self.cache.get_candata(veh_id,tdelta)
@@ -93,7 +195,7 @@ class TrackUnit:
             data += _d
         return data
 
-    async def _a_get_faults(self,veh_id,tdelta=None):
+    async def async_get_faults(self,veh_id,tdelta=None):
         """async get_faults method"""
         data = []
         _it, _ = self.cache.get_faults(veh_id,tdelta)
@@ -103,36 +205,36 @@ class TrackUnit:
 
     def get_history(self,veh_id,tdelta):
         """getHistory method"""
-        return asyncio.run(self._a_get_history(veh_id,tdelta))
+        return asyncio.run(self.async_get_history(veh_id,tdelta))
 
     def get_candata(self,veh_id,tdelta=None):
         """getCanData method"""
-        return asyncio.run(self._a_get_candata(veh_id,tdelta))
+        return asyncio.run(self.async_get_candata(veh_id,tdelta))
 
     def get_faults(self,veh_id,tdelta=None):
         """get_faults method"""
-        return asyncio.run(self._a_get_faults(veh_id,tdelta))
+        return asyncio.run(self.async_get_faults(veh_id,tdelta))
 
-    def get_multi_history(self,idlist,tdelta,f_process=None,progress_bar=True):
+    def get_multi_history(self,idlist,tdelta):
         """
         returns the data of a list of vehicles with the ids provided in idlist.
         f_process can be specified to process slices of data. f_process returns a list
         """
-        return get_multi_general(
-            self.cache.get_history,idlist,tdelta,f_process,progress_bar)
+        return self.get_multi_general(
+            idlist,tdelta,"history",self.settings['use_async_generator'])
 
-    def get_multi_candata(self,idlist,tdelta,f_process=None,progress_bar=True):
+    def get_multi_candata(self,idlist,tdelta):
         """
         returns the data of a list of vehicles with the ids provided in idlist.
         f_process can be specified to process slices of data. f_process returns a list
         """
-        return get_multi_general(
-            self.cache.get_candata,idlist,tdelta,f_process,progress_bar)
+        return self.get_multi_general(
+            idlist,tdelta,"candata",self.settings['use_async_generator'])
 
-    def get_multi_faults(self,idlist,tdelta,f_process=None,progress_bar=True):
+    def get_multi_faults(self,idlist,tdelta):
         """
         returns the data of a list of vehicles with the ids provided in idlist.
         f_process can be specified to process slices of data. f_process returns a list
         """
-        return get_multi_general(
-            self.cache.get_faults,idlist,tdelta,f_process,progress_bar)
+        return self.get_multi_general(
+            idlist,tdelta,"error",self.settings['use_async_generator'])
