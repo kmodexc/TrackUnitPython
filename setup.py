@@ -21,6 +21,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     packages=["pytrackunit"],
-    install_requires=["aiohttp", "aiofiles", "tqdm", "python-dateutil", "aiosqlite"],
+    install_requires=["aiohttp", "aiofiles", "tqdm", "python-dateutil", "aiosqlite", "aioprocessing"],
     python_requires=">=3.8",
 )
