@@ -3,6 +3,12 @@ from pytrackunit.trackunit import TrackUnit
 
 VEH_ID = "3331359"
 
+settings={
+    'use_progress_bar':False,
+    'use_async_generator':False,
+    'verbose':True
+}
+
 class CacheForTests:
     """tucache class"""
     def __init__(self):
@@ -53,7 +59,7 @@ class CacheForTests:
         return self.generate_faults_data(), 10
 
 def test_getunitlist():
-    tu = TrackUnit()
+    tu = TrackUnit(**settings)
     #tu.cache.dir = "pytest-web-cache"
     tu.cache = CacheForTests()
     tu.cache.clean()
@@ -62,41 +68,23 @@ def test_getunitlist():
     assert data[0]["serialNumber"] == "3603666"
     assert data[0]["name"] == "KT559-36 (416-36) WNK41636VKTKF0002"
 def test_gethistory():
-    tu = TrackUnit()
+    tu = TrackUnit(**settings)
     tu.cache = CacheForTests()
     tu.cache.clean()
     #tu.cache.dir = "pytest-web-cache"
     data = tu.get_history(VEH_ID,tdelta=1)
     assert len(data) == 10
 def test_getcandata():
-    tu = TrackUnit()
+    tu = TrackUnit(**settings)
     tu.cache = CacheForTests()
     #tu.cache.dir = "pytest-web-cache"
     tu.cache.clean()
     data = tu.get_candata(VEH_ID,tdelta=1)
     assert len(data) == 10
 def test_getfaults():
-    tu = TrackUnit()
+    tu = TrackUnit(**settings)
     tu.cache = CacheForTests()
     #tu.cache.dir = "pytest-web-cache"
     tu.cache.clean()
     data = tu.get_faults(VEH_ID,tdelta=100)
     assert len(data) == 10
-def test_get_multi_history():
-    tu = TrackUnit()
-    tu.cache = CacheForTests()
-    units = tu.get_unitlist()
-    vids = list(map(lambda x: x['serialNumber'], units))
-    tu.get_multi_history(vids,1000,f_process=None,progress_bar=False)
-def test_get_multi_candata():
-    tu = TrackUnit()
-    tu.cache = CacheForTests()
-    units = tu.get_unitlist()
-    vids = list(map(lambda x: x['serialNumber'], units))
-    tu.get_multi_candata(vids,1000,f_process=None,progress_bar=False)
-def test_get_multi_faults():
-    tu = TrackUnit()
-    tu.cache = CacheForTests()
-    units = tu.get_unitlist()
-    vids = list(map(lambda x: x['serialNumber'], units))
-    tu.get_multi_faults(vids,1000,f_process=None,progress_bar=False)
