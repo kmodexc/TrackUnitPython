@@ -142,12 +142,11 @@ def candata_item_to_sql_item(_x : dict,meta : dict) -> Tuple:
     _id = meta['id']
     _time = int(get_datetime(_x['time']).timestamp()*1000)
     _variableid = _x['variableId']
-    _name = _x['name']
-    _value = _x['value']
-    if 'uoM' in _x:
-        _uom = _x['uoM']
-    else:
-        _uom = None
+    _name = _x.get('name',None)
+    _value = _x.get('value',None)
+    _uom = _x.get('uoM',None)
+    if _name is None or _value is None:
+        return None
     return (_id,_time,_variableid,_name,_value,_uom)
 
 def sql_item_to_candata_item(obj : Tuple) -> dict:
@@ -355,7 +354,8 @@ async def SqlInsertIter(
 
         async for data,meta in sqliter:
             data = list(data)
-            sqldata = map(lambda x: fconv(x[0],x[1]),zip(data,[meta]))
+            sqldata = map(lambda x: fconv(x[0],x[1]),zip(data,len(data)*[meta]))
+            sqldata = filter(lambda x: x is not None, sqldata)
 
             try:
                 await _db.executemany(insert_sql,sqldata)
