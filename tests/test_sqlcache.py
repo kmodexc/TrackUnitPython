@@ -91,6 +91,25 @@ class CacheForTests:
         print("Start generator with offset",offset)
         for i in range(10):                
             yield [self.get_testobj(i+offset,starttime)], self.testmeta
+    async def ret_val_gen_start_end(self,start : datetime,end : datetime,count : int=100):
+        start = start.timestamp()
+        end = end.timestamp()
+        print("tdiff=",(end-start))
+        step = ((end - start) / count)
+        print("Step=",step)
+        pos = start
+        print("Start=",start)
+        for i in range(count//10):
+            datalist = []
+            for i in range(10):
+                obj = deepcopy(self.testobj)
+                pos = int(pos)
+                print("Pos=",pos)
+                dati = datetime.fromtimestamp(pos)
+                obj['time'] = dati.isoformat()
+                datalist.append(obj)
+                pos += step
+            yield datalist, self.testmeta
     def get_hist_obj(self, nr,time=None):
         obj = deepcopy(EXAMPLE_HIST_OBJ)
         if time is not None:
@@ -275,7 +294,7 @@ def test_history_item_conversion():
 # ---------------- SqlInsertIter ---------------------
 
 @pytest.mark.asyncio
-async def test_sqlinsertiter():
+async def test_sqlinsertiter_1():
     if os.path.isfile(db_path):
         os.remove(db_path)
 
@@ -295,6 +314,28 @@ async def test_sqlinsertiter():
         with db:
             cur = db.execute("select count(*) from error")
             assert 10 == cur.fetchone()[0]
+
+@pytest.mark.asyncio
+async def test_sqlinsertiter_2():
+    if os.path.isfile(db_path):
+        os.remove(db_path)
+
+    cache = CacheForTests()
+    create_tables(db_path)
+    it = SqlInsertIter(
+        db_path=db_path,
+        sqliter=cache.ret_val_gen_start_end(START,END),
+        verbose=True,
+        table="error",
+        timeout=1,
+        **cache.testmeta)
+    async for x in it:
+        print(x)
+
+    with sqlite3.connect(db_path) as db:
+        with db:
+            cur = db.execute("select count(*) from error")
+            assert 100 == cur.fetchone()[0]
 
 @pytest.mark.asyncio
 async def test_sqlinsertiter_isloaded():
