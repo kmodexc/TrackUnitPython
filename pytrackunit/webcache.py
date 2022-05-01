@@ -51,9 +51,9 @@ class WebCache:
         self.settings.setdefault("dont_return_data",False)
         self.settings.setdefault("return_only_cache_files",False)
         self.settings.setdefault("dont_cache_data",False)
-        self.settings.setdefault("max_requests",40)
+        self.settings.setdefault("max_requests",1000)
         self.settings.setdefault("throttle_period",1)
-        self.settings.setdefault("throttle_limit",40)
+        self.settings.setdefault("throttle_limit",45)
         if self.settings['verbose']:
             print("WebCaches settings:",self.settings)
 
