@@ -1,9 +1,11 @@
 """module TrackUnit"""
 
+import sys
 import json
 import os.path
 import asyncio
-from typing import Callable, Iterable
+from typing import Callable, Coroutine, Iterable
+import traceback
 
 import tqdm
 import aioprocessing
@@ -14,21 +16,25 @@ from .sqlcache import SqlCache
 from .helper import SecureString
 
 
-async def async_queue_generator(queue : aioprocessing.AioQueue):
+async def async_queue_generator(
+        queue : aioprocessing.AioQueue):
     """converts the queue into an generator"""
     while True:
         obj = await queue.coro_get()
         if obj is None:
             break
-        yield obj
+        for x in obj:
+            yield x
 
-def queue_generator(queue : aioprocessing.AioQueue):
+def queue_generator(
+        queue : aioprocessing.AioQueue):
     """converts the queue into an generator"""
     while True:
         obj = queue.get()
         if obj is None:
             break
-        yield obj
+        for x in obj:
+            yield x
 
 async def async_collect_data(
         queue : aioprocessing.AioQueue,
@@ -39,15 +45,11 @@ async def async_collect_data(
     Collects the data from tuiter and puts it in a async queue.
     If set it will call update of the progress_bar after each iteration.
     """
-
-
     async for data_list, meta in tuit:
-        proc_data = f_process(data_list,meta)
-        for _x in proc_data:
-            if _x is not None:
-                await queue.coro_put(_x)
+        proc_data = list(f_process(data_list,meta))
+        await queue.coro_put(proc_data)
         if progress_bar is not None:
-            progress_bar.update()
+            progress_bar.update(len(proc_data))
 
 
 async def async_provider_process(
@@ -60,19 +62,33 @@ async def async_provider_process(
     puts the data it gets from trackunit and puts it in the given queue
     function can be "error" "history" "candata"
     """
-    if settings['verbose']:
-        print("Provider process started")
+    try:
 
-    _tu = TrackUnit(**settings)
+        if settings['verbose']:
+            print("Provider process started")
 
-    if str_function == "history":
-        f_function = _tu.cache.get_history
-    elif str_function == "candata":
-        f_function = _tu.cache.get_candata
-    else:
-        f_function = _tu.cache.get_faults
+        # Prevent sql-timouts
+        settings['sql_repair_on_start'] = False
 
-    await _tu.async_get_multi_general_queue(queue,f_function,veh_id_list,tdelta)
+        _tu = TrackUnit(**settings)
+
+        if str_function == "history":
+            f_function = _tu.cache.get_history
+        elif str_function == "candata":
+            f_function = _tu.cache.get_candata
+        else:
+            f_function = _tu.cache.get_faults
+
+        await _tu.async_get_multi_general_queue(queue,f_function,veh_id_list,tdelta)
+    
+    except Exception as exc:
+        print("Provider process quits on error!", file=sys.stderr)
+        print(traceback.format_exc())
+        print(exc, file=sys.stderr)
+
+    finally:
+        # by this avoid runtime loop closed errors
+        await asyncio.sleep(0.1)
 
 def provider_process(
         settings : dict,
@@ -116,6 +132,7 @@ class TrackUnit:
         self.settings.setdefault("use_progress_bar",True)
         self.settings.setdefault("queue_size",1000)
         self.settings.setdefault("use_async_generator",False)
+        self.settings.setdefault("use_multiprocessing",True)
 
     async def async_get_multi_general_queue(
             self,
@@ -128,49 +145,52 @@ class TrackUnit:
         f_process can be specified to process slices of data. f_process returns a list
         """
 
-        f_process = lambda x, meta: zip(x,[meta.get('id','no-id-found')])
+        try:
 
-        iterators = []
+            f_process = lambda x, meta: zip(x,len(x)*[meta.get('id','no-id-found')])
 
-        globlen = 0
-        for _id in idlist:
-            _it,_l= func(_id,tdelta)
-            globlen += _l
-            iterators.append(_it)
+            iterators = []
 
-        if self.settings['use_progress_bar']:
-            pbar = tqdm.tqdm(total=globlen)
-        else:
-            pbar = None
+            globlen = 0
+            for _id in idlist:
+                _it,_l= func(_id,tdelta)
+                globlen += _l
+                iterators.append(_it)
 
-        zipped_list = list(zip(
-            len(iterators)*[queue],
-            iterators,
-            len(iterators)*[f_process],
-            len(iterators)*[pbar]))
+            if self.settings['use_progress_bar']:
+                pbar = tqdm.tqdm(total=globlen)
+            else:
+                pbar = None
 
-        tasks = list(map(lambda x: async_collect_data(*x),zipped_list))
+            zipped_list = list(zip(
+                len(iterators)*[queue],
+                iterators,
+                len(iterators)*[f_process],
+                len(iterators)*[pbar]))
 
-        if self.settings['verbose']:
-            print("async_get_multi_general_queue created tasks")
+            tasks = list(map(lambda x: async_collect_data(*x),zipped_list))
 
-        await asyncio.gather(*tasks)
+            if self.settings['verbose']:
+                print("async_get_multi_general_queue created tasks")
 
-        if self.settings['verbose']:
-            print("async_get_multi_general_queue tasks finished")
+            await asyncio.gather(*tasks)
 
-        await queue.coro_put(None)
+            if self.settings['verbose']:
+                print("async_get_multi_general_queue tasks finished")
+
+        finally:
+            await queue.coro_put(None)
 
     def get_multi_general(
             self,
             idlist : Iterable[str],
             tdelta : int,
-            str_process : str,
-            use_async_generator : bool) -> Iterable:
+            str_process : str) -> Iterable:
         """
         returns the data of a list of vehicles with the ids provided in idlist.
         f_process can be specified to process slices of data. f_process returns a list
         """
+
         queue = aioprocessing.AioQueue(self.settings['queue_size'])
         worker = aioprocessing.AioProcess(
             target=provider_process,
@@ -178,7 +198,7 @@ class TrackUnit:
         # pylint: disable=no-member
         worker.start()
         # pylint: enable=no-member
-        if use_async_generator:
+        if self.settings['use_async_generator']:
             return async_queue_generator(queue)
         return queue_generator(queue)
 
@@ -239,7 +259,7 @@ class TrackUnit:
         f_process can be specified to process slices of data. f_process returns a list
         """
         return self.get_multi_general(
-            idlist,tdelta,"history",self.settings['use_async_generator'])
+            idlist,tdelta,"history")
 
     def get_multi_candata(self,idlist,tdelta):
         """
@@ -247,7 +267,7 @@ class TrackUnit:
         f_process can be specified to process slices of data. f_process returns a list
         """
         return self.get_multi_general(
-            idlist,tdelta,"candata",self.settings['use_async_generator'])
+            idlist,tdelta,"candata")
 
     def get_multi_faults(self,idlist,tdelta):
         """
@@ -255,4 +275,4 @@ class TrackUnit:
         f_process can be specified to process slices of data. f_process returns a list
         """
         return self.get_multi_general(
-            idlist,tdelta,"error",self.settings['use_async_generator'])
+            idlist,tdelta,"error")
