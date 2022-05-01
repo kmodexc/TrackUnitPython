@@ -27,8 +27,8 @@ create table historymeta(
 
 CREATE_HISTORY_TABLE = '''
 CREATE TABLE history(
-    unit text not null, 
-    time int not null, 
+    unit text, 
+    time int, 
     event int, 
     keyId text, 
     latitude real,
@@ -70,8 +70,7 @@ CREATE TABLE history(
     Input3ChangeCounter INT,
     Input4ChangeCounter INT,
     batteryLevel real,
-    externalPower real,
-    primary key (unit,time)
+    externalPower real
 )
 '''
 
@@ -94,8 +93,7 @@ CREATE TABLE error(
     fmi int not null,
     occurenceCount int,
     name text,
-    description text,
-    primary key(unit,time,spn,fmi)
+    description text
 )
 '''
 
@@ -117,8 +115,7 @@ CREATE TABLE candata(
     variableId int not null,
     name text not null,
     value text not null,
-    uoM text,
-    primary key(unit,time,variableId)
+    uoM text
 )
 '''
 
@@ -167,9 +164,7 @@ def error_item_to_sql_item(_x : dict,meta : dict) -> Tuple:
     returns the error as a tuple and converts the time to unix timestamp (milliseconds)
     """
     _id = meta['id']
-    #print(x['time'])
     _time = int(get_datetime(_x['time']).timestamp()*1000)
-    #print(_time,x['time'],get_datetime(x['time']))
     _spn = _x['spn']
     _fmi = _x['fmi']
     _oc = _x['occurrenceCount']
@@ -204,7 +199,7 @@ def history_item_to_sql_item(_x : dict, meta : dict) -> Tuple:
     """
     _time = int(get_datetime(_x['time']).timestamp()*1000)
     _unit = meta['id']
-    _event = _x['event'] if 'event' in _x else None
+    _event = _x['event']
     _keyId = _x['keyId'] if 'keyId' in _x else None
     _latitude = _x['latitude'] if 'latitude' in _x else None
     _longitude = _x['longitude'] if 'longitude' in _x else None
@@ -318,7 +313,7 @@ async def SqlInsertIter(
 
     db_path = kwargs['db_path']
     verbose = kwargs['verbose']
-    timeout = kwargs['timeout']
+    timeout = kwargs['sql_timeout']
     table = kwargs['table']
     veh_id = kwargs['id']
 
@@ -356,11 +351,13 @@ async def SqlInsertIter(
             data = list(data)
             sqldata = map(lambda x: fconv(x[0],x[1]),zip(data,len(data)*[meta]))
             sqldata = filter(lambda x: x is not None, sqldata)
+            sqldata = list(sqldata)
 
             try:
                 await _db.executemany(insert_sql,sqldata)
                 await _db.commit()
             except sqlite3.IntegrityError as exc1:
+                await _db.rollback()
                 if verbose:
                     print("Integrety error with",kwargs)
                     print("Try to find double entry (insert side)")
@@ -369,7 +366,6 @@ async def SqlInsertIter(
                             await _db.execute(insert_sql,in_item)
                         except sqlite3.IntegrityError:
                             print("Item throwing Integrity error",in_item)
-                await _db.rollback()
                 raise sqlite3.IntegrityError from exc1
 
             yield data, meta
@@ -391,9 +387,10 @@ async def SqlReturnIter(
 
     db_path = kwargs['db_path']
     verbose = kwargs['verbose']
-    timeout = kwargs['timeout']
+    timeout = kwargs['sql_timeout']
     table = kwargs['table']
     veh_id = kwargs['id']
+    block_size = kwargs['sql_return_block_size']
 
     command = f"""
         select * from {table} where unit = ? and time >= ? and time <= ? order by time
@@ -426,21 +423,27 @@ async def SqlReturnIter(
                 await asyncio.sleep(0)
 
         async with _db.execute(command,(veh_id,start_ts_ms, end_ts_ms)) as _cur:
-            async for x in _cur:
-                yield [fconv(x)], kwargs
+            while True:
+                data = await _cur.fetchmany(block_size)
+                data = list(map(lambda x: fconv(x),data))
+                yield data, kwargs
+                if len(data) < block_size:
+                    break
 
 class SqlCache:
     """Sql cache can cache trackunit data in Sqlite DB"""
     def __init__(self,**kwargs):
-        self.verbose = kwargs.get('verbose',False)
-        self.db_path = kwargs.get('db_path','sqlcache.sqlite')
-        self.tdelta_end = kwargs.get('tdelta_end',None)
+        self.settings = kwargs
+        kwargs.setdefault('verbose',False)
+        kwargs.setdefault('db_path','sqlcache.sqlite')
+        kwargs.setdefault('tdelta_end',None)
         cache1_kwargs = deepcopy(kwargs)
         cache1_kwargs['dont_cache_data'] = kwargs.get('sql_cache1_dont_cache_data',True)
         self.cache1 = kwargs.get('sql_cache1',TuCache(**cache1_kwargs))
         self.cache2 = kwargs.get('sql_cache2',TuCache(**kwargs))
         self.db_connection = None
-        self.timeout = kwargs.get('sql_timeout',30)
+        kwargs.setdefault('sql_timeout',30)
+        kwargs.setdefault('sql_return_block_size',100)
         self.connect()
         if kwargs.get('sql_repair_on_start',True):
             for table in ['error','history','candata']:
@@ -450,10 +453,11 @@ class SqlCache:
         """Connects the SqlCache and sets up db_connection"""
         if self.db_connection is not None:
             raise Exception("Cant connect twice")
-        no_db_present = not os.path.isfile(self.db_path)
-        self.db_connection = sqlite3.connect(self.db_path,timeout=self.timeout)
+        no_db_present = not os.path.isfile(self.settings['db_path'])
+        self.db_connection = sqlite3.connect(
+            self.settings['db_path'],timeout=self.settings['sql_timeout'])
         if no_db_present:
-            create_tables(self.db_path)
+            create_tables(self.settings['db_path'])
 
     def close(self) -> None:
         """closes database connection"""
@@ -472,7 +476,7 @@ class SqlCache:
         """removes database file"""
         self.close()
         if remove_data:
-            os.remove(self.db_path)
+            os.remove(self.settings['db_path'])
         self.connect()
 
     def repair(self,table : str) -> None:
@@ -527,9 +531,7 @@ class SqlCache:
             int_data_iter,
             start_ts_ms,
             end_ts_ms,
-            db_path=self.db_path,
-            verbose=self.verbose,
-            timeout=self.timeout,
+            **self.settings,
             **kwargs)
 
         if previter is None:
@@ -555,7 +557,7 @@ class SqlCache:
             """,(kwargs['id'],start_ts_ms,end_ts_ms))
         cnt = cur.fetchone()[0]
 
-        if self.verbose:
+        if self.settings['verbose']:
             print("found",cnt,"in sql")
 
         if previter is None:
@@ -565,11 +567,9 @@ class SqlCache:
             previter.add(SqlReturnIter(
                 start_ts_ms,
                 end_ts_ms,
-                db_path=self.db_path,
-                verbose=self.verbose,
-                timeout=self.timeout,
+                **self.settings,
                 **kwargs))
-        elif self.verbose:
+        elif self.settings['verbose']:
             print("could not find any item in block ",start_ts_ms,end_ts_ms,"for unit",kwargs['id'])
 
         return previter, cnt
@@ -595,7 +595,7 @@ class SqlCache:
         if first is not None:
             me_vehid, me_start, me_end = first[0], first[1], first[2]
         else:
-            if self.verbose:
+            if self.settings['verbose']:
                 print("Stop iteration. Didnt find",\
                     kwargs['id'],start_ts_ms,end_ts_ms,\
                     "Get errors from upstream now")
@@ -604,7 +604,7 @@ class SqlCache:
         me_start = int(float(me_start))
         me_end = int(float(me_end))
 
-        if self.verbose:
+        if self.settings['verbose']:
             print("Found block",me_vehid,me_start,me_end)
 
         # Depending on the start and end of the next block, apply divide and conquer
@@ -644,7 +644,7 @@ class SqlCache:
         return self.get_general(previter,**meta)
     def get_faults(self,veh_id : str,tdelta=None,previter : TuIter=None) -> Tuple[TuIter,int]:
         """get_faults method"""
-        start, end = start_end_from_tdelta(tdelta,self.tdelta_end)
+        start, end = start_end_from_tdelta(tdelta,self.settings['tdelta_end'])
         return self.get_faults_timedelta(veh_id,start,end,previter)
     def get_history_timedelta(self,
             veh_id : str,
@@ -660,7 +660,7 @@ class SqlCache:
         return self.get_general(previter,**meta)
     def get_history(self,veh_id : str,tdelta=None,previter : TuIter=None) -> Tuple[TuIter,int]:
         """get_faults method"""
-        start, end = start_end_from_tdelta(tdelta,self.tdelta_end)
+        start, end = start_end_from_tdelta(tdelta,self.settings['tdelta_end'])
         return self.get_history_timedelta(veh_id,start,end,previter)
     def get_candata_timedelta(self,
             veh_id : str,
@@ -676,5 +676,5 @@ class SqlCache:
         return self.get_general(previter,**meta)
     def get_candata(self,veh_id : str,tdelta=None,previter : TuIter=None) -> Tuple[TuIter,int]:
         """get_faults method"""
-        start, end = start_end_from_tdelta(tdelta,self.tdelta_end)
+        start, end = start_end_from_tdelta(tdelta,self.settings['tdelta_end'])
         return self.get_candata_timedelta(veh_id,start,end,previter)
