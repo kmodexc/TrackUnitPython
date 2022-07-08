@@ -6,6 +6,7 @@ pytest-web-cache/
 pytest_webcache/
 *.sqlite
 test.py
+benchmark.py
 *.db
 *.png
 test.sql
